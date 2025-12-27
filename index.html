@@ -14,7 +14,7 @@
         body {
             margin: 0;
             padding: 0;
-            background: #2c3e50;
+            background: #1a1a2e;
             font-family: 'Arial', sans-serif;
             overflow: hidden;
             cursor: none; /* 기본 커서 숨김 */
@@ -23,7 +23,7 @@
         #gameArea {
             width: 100vw;
             height: 100vh;
-            background: #2c3e50;
+            background: #1a1a2e;
             position: relative;
             overflow: hidden;
         }
@@ -52,15 +52,217 @@
             opacity: 0.8;
             border-radius: 50%;
             position: absolute;
-            transition: all 0.1s ease-out;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            z-index: 1;
+            transition: filter 0.3s ease;
+        }
+
+        #blueCircle {
+            width: 50px;
+            height: 50px;
+            background: #3498db;
+            opacity: 0.8;
+            border-radius: 50%;
+            position: absolute;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            z-index: 1;
+            transition: filter 0.3s ease;
+        }
+
+        #lightPlatform {
+            width: 375px;
+            height: 375px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            border-radius: 50%;
+            background: rgba(255, 200, 100, 0.4);
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .topGauge {
+            width: 100px;
+            height: 8px;
+            background: rgba(128, 128, 128, 0.3);
+            position: fixed;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 4px;
+            overflow: hidden;
+            z-index: 1000;
+        }
+
+        .topGauge.gauge1 {
+            margin-left: -165px;
+        }
+
+        .topGauge.gauge2 {
+            margin-left: -55px;
+        }
+
+        .topGauge.gauge3 {
+            margin-left: 55px;
+        }
+
+        .topGauge.gauge4 {
+            margin-left: 165px;
+        }
+
+        .topGaugeFill {
+            width: 0%;
+            height: 100%;
+            background: rgba(128, 128, 128, 0.9);
+            transition: width 0.1s linear;
+            border-radius: 4px;
+        }
+
+        .healthGauge {
+            width: 200px;
+            height: 12px;
+            background: rgba(128, 128, 128, 0.3);
+            position: fixed;
+            top: 30px;
+            border-radius: 6px;
+            overflow: hidden;
+            z-index: 1001;
+        }
+
+        #playerHealthGauge {
+            left: 30px;
+        }
+
+        #enemyHealthGauge {
+            right: 30px;
+        }
+
+        .healthGaugeFill {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to right, #e74c3c, #c0392b);
+            transition: width 0.3s ease;
+            border-radius: 6px;
+        }
+
+        #enemyHealthFill {
+            background: linear-gradient(to right, #3498db, #2980b9);
+        }
+
+        #roundEndScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 10000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            pointer-events: none;
+        }
+        
+        #upgradeOrbsContainer {
+            pointer-events: auto;
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .upgradeOrb {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            position: absolute;
+            background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.8), rgba(200, 150, 255, 0.6));
+            box-shadow: 0 0 20px rgba(200, 150, 255, 0.8), inset 0 0 20px rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            transition: transform 0.3s ease, box-shadow 0.2s ease;
+            transform-origin: center;
+        }
+
+        .upgradeOrb:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 30px rgba(200, 150, 255, 1), inset 0 0 30px rgba(255, 255, 255, 0.5);
+        }
+
+        .upgradeOrb.selected {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        
+        .orbFlash {
+            position: absolute;
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            animation: flashGlow 0.5s ease-out;
+            transform: translate(-50%, -50%);
+        }
+        
+        @keyframes flashGlow {
+            0% {
+                opacity: 0.8;
+                transform: translate(-50%, -50%) scale(0.5);
+            }
+            50% {
+                opacity: 0.6;
+                transform: translate(-50%, -50%) scale(1.0);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(1.2);
+            }
+        }
+
+        #roundInfo {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            z-index: 1002;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
         }
 
     </style>
 </head>
 <body>
+    <div class="topGauge gauge1">
+        <div class="topGaugeFill" id="gauge1"></div>
+    </div>
+    <div class="topGauge gauge2">
+        <div class="topGaugeFill" id="gauge2"></div>
+    </div>
+    <div class="topGauge gauge3">
+        <div class="topGaugeFill" id="gauge3"></div>
+    </div>
+    <div class="topGauge gauge4">
+        <div class="topGaugeFill" id="gauge4"></div>
+    </div>
+    <div class="healthGauge" id="playerHealthGauge">
+        <div class="healthGaugeFill" id="playerHealthFill"></div>
+    </div>
+    <div class="healthGauge" id="enemyHealthGauge">
+        <div class="healthGaugeFill" id="enemyHealthFill"></div>
+    </div>
+    <div id="roundInfo">Round 1</div>
+    <div id="roundEndScreen">
+        <div id="upgradeOrbsContainer"></div>
+    </div>
     <div id="gameArea">
+        <div id="lightPlatform"></div>
         <div id="character"></div>
+        <div id="blueCircle"></div>
         <div id="cursorGauge">
             <svg width="20" height="20" viewBox="0 0 20 20">
                 <circle cx="10" cy="10" r="8" fill="none" stroke="rgba(255, 255, 255, 0.3)" stroke-width="4.5"/>
@@ -80,17 +282,112 @@
 
     <script>
         const character = document.getElementById('character');
+        const blueCircle = document.getElementById('blueCircle');
+        const lightPlatform = document.getElementById('lightPlatform');
         const gameArea = document.getElementById('gameArea');
         const cursorGauge = document.getElementById('cursorGauge');
         const gaugeCircle = document.getElementById('gaugeCircle');
         const gaugeBackground = document.getElementById('gaugeBackground');
+        
+        // 상단 게이지 요소들
+        const topGauge1 = document.getElementById('gauge1');
+        const topGauge2 = document.getElementById('gauge2');
+        const topGauge3 = document.getElementById('gauge3');
+        const topGauge4 = document.getElementById('gauge4');
+        
+        // 상단 게이지 관련 변수
+        const topGaugeDuration = 20000; // 20초 (밀리초)
+        let topGauge1StartTime = Date.now();
+        let topGauge2StartTime = Date.now() + topGaugeDuration; // 20초 후 시작
+        let topGauge3StartTime = Date.now() + topGaugeDuration * 2; // 40초 후 시작
+        let topGauge4StartTime = Date.now() + topGaugeDuration * 3; // 60초 후 시작
+        let gauge1Completed = false; // 게이지 1 완료 여부
+        let gauge2Completed = false; // 게이지 2 완료 여부
+        let gauge3Completed = false; // 게이지 3 완료 여부
+        let gauge4Completed = false; // 게이지 4 완료 여부
+        
+        // 체력 시스템
+        const playerHealthFill = document.getElementById('playerHealthFill');
+        const enemyHealthFill = document.getElementById('enemyHealthFill');
+        const maxHealth = 10;
+        let currentHealth = maxHealth;
+        let enemyHealth = maxHealth; // 상대 체력
+        let lastDamageTime = Date.now();
+        let lastEnemyDamageTime = Date.now();
+        const damageInterval = 100; // 0.1초마다 데미지 (100ms)
+        
+        // 라운드 시스템
+        const roundInfo = document.getElementById('roundInfo');
+        const roundEndScreen = document.getElementById('roundEndScreen');
+        const upgradeOrbsContainer = document.getElementById('upgradeOrbsContainer');
+        let currentRound = 1;
+        let playerWins = 0;
+        let enemyWins = 0;
+        let isRoundEnded = false;
+        let roundEndReason = ''; // 'player' 또는 'enemy'
+        let waitingForSelection = false;
+        let selectionTurn = ''; // 'loser' 또는 'winner'
+        let selectedOrbs = [];
+        let gamePaused = false;
+        let orbContactTimes = new Map(); // 구슬 접촉 시작 시간 추적 (구슬 요소 -> 접촉 시작 시간)
+        const orbSelectionDuration = 2000; // 구슬 선택에 필요한 접촉 시간 (2초)
+        
+        // 게이지 효과 변수
+        let currentGaugeLevel = 1; // 현재 활성화된 게이지 레벨
+        let platformSizeMultiplier = 1.0; // 장판 크기 배수
+        let platformSpeedMultiplier = 1.0; // 장판 속도 배수
+        let platformSizeChangeStartTime = 0; // 장판 크기 변경 시작 시간
+        let platformSizeChangeDuration = 5000; // 장판 크기 변경 지속 시간 (5초)
+        let platformSizeChangeActive = false; // 장판 크기 변경 중인지
+        let gauge2SizeReduced = false; // 게이지 2에서 크기 감소 적용 여부
+        let gauge4SizeReduced = false; // 게이지 4에서 크기 감소 적용 여부
+        let gauge2BaseMultiplier = 1.0; // 게이지 2 시작 시 기준 배수
+        let gauge4BaseMultiplier = 1.0; // 게이지 4 시작 시 기준 배수
 
-        let x = gameArea.offsetWidth / 2 - 25;  // 캐릭터의 시작 X 위치 (중앙)
-        let y = gameArea.offsetHeight / 2 - 25; // 캐릭터의 시작 Y 위치 (중앙)
         const speed = 3; // 이동 속도
         const characterSize = 50; // 캐릭터 크기
+        const radius = characterSize / 2; // 원의 반지름
+        const pushForce = 0.3; // 밀기 힘 (더 부드럽게)
+        const collisionPadding = 2; // 충돌 방지 여유 공간 (증가)
+        
+        // 빛 장판 관련 변수
+        const platformSize = 375; // 빛 장판 크기 (300 * 1.25 = 375)
+        const platformRadius = platformSize / 2; // 빛 장판 반지름
+        const platformSpeed = 0.5; // 빛 장판 이동 속도 (느리게)
+        const platformBoundaryMargin = 100; // 벽으로부터 이 거리만큼 가까워지면 중앙으로 이동
+        let platformX = window.innerWidth / 2 - platformRadius; // 빛 장판 X 위치
+        let platformY = window.innerHeight / 2 - platformRadius; // 빛 장판 Y 위치
+        let platformDirectionX = (Math.random() - 0.5) * 2; // 랜덤 방향 X (-1 ~ 1)
+        let platformDirectionY = (Math.random() - 0.5) * 2; // 랜덤 방향 Y (-1 ~ 1)
+        // 방향 정규화
+        let dirLength = Math.sqrt(platformDirectionX * platformDirectionX + platformDirectionY * platformDirectionY);
+        platformDirectionX /= dirLength;
+        platformDirectionY /= dirLength;
+        
+        // 방향 변경 타이머
+        let platformDirectionChangeTime = Date.now();
+        let platformDirectionDuration = 5000 + Math.random() * 5000; // 5~10초 (랜덤)
+        
+        // 초기 위치 계산 함수
+        function initializePosition() {
+            const centerX = window.innerWidth / 2 - characterSize / 2;
+            const centerY = window.innerHeight / 2 - characterSize / 2;
+            return { x: centerX, y: centerY };
+        }
+        
+        let { x, y } = initializePosition();  // 캐릭터의 시작 위치 (중앙)
         let targetX = x; // 목표 X 위치
         let targetY = y; // 목표 Y 위치
+        let prevX = x; // 이전 프레임의 X 위치
+        let prevY = y; // 이전 프레임의 Y 위치
+        let velocityX = 0; // 플레이어의 X 속도
+        let velocityY = 0; // 플레이어의 Y 속도
+        
+        // 파란색 원 위치 및 속도
+        let blueX = window.innerWidth / 2 - characterSize / 2 + 100; // 캐릭터 오른쪽에 배치
+        let blueY = window.innerHeight / 2 - characterSize / 2;
+        let blueVelocityX = 0; // 파란 원의 X 속도
+        let blueVelocityY = 0; // 파란 원의 Y 속도
         
         // 돌진 관련 변수
         let isDashing = false;
@@ -106,12 +403,14 @@
         const dashForwardDistance = 100; // 앞으로 돌진 거리
         const dashForwardSpeed = 15; // 앞으로 돌진 속도 (픽셀/프레임)
         const dashCooldown = 1000; // 쿨타임 1초 (밀리초)
+        const pushDistanceMultiplier = 1.75; // 돌진 시 밀리는 거리 배수 (돌진 거리의 1.75배)
+        const pushDeceleration = 0.92; // 밀려날 때 감속 계수 (매 프레임 8% 감소)
+        const circumference = 2 * Math.PI * 8; // 원의 둘레 (r=8) ≈ 50.27
 
-        // 마우스 위치 추적
-        gameArea.addEventListener('mousemove', (e) => {
-            const rect = gameArea.getBoundingClientRect();
-            targetX = e.clientX - rect.left - characterSize / 2;
-            targetY = e.clientY - rect.top - characterSize / 2;
+        // 마우스 위치 추적 (항상 작동하도록 window에 등록)
+        window.addEventListener('mousemove', (e) => {
+            targetX = e.clientX - characterSize / 2;
+            targetY = e.clientY - characterSize / 2;
             
             // 커서 게이지 위치 업데이트
             cursorGauge.style.left = e.clientX + 'px';
@@ -121,29 +420,28 @@
         // 게이지 업데이트 함수
         function updateGauge() {
             const now = Date.now();
-            const circumference = 2 * Math.PI * 8; // 원의 둘레 (r=8)
             
             if (now < dashCooldownEndTime) {
-                // 쿨타임 중 - 회색 배경 전체 표시
-                gaugeBackground.style.strokeDashoffset = 0;
-                gaugeBackground.style.display = 'block';
+                // 쿨타임 중: 회색 배경 표시 + 위에서부터 시계방향으로 하얀색 게이지 채워짐
+                gaugeBackground.style.display = 'block'; // 회색 배경 표시
                 
-                // 위쪽부터 시계방향으로 하얀색 게이지가 차오름
+                // 쿨타임 진행도 계산 (1.0 = 시작, 0.0 = 끝)
                 const cooldownProgress = (dashCooldownEndTime - now) / dashCooldown;
-                const offset = circumference * (1 - cooldownProgress);
+                
+                // 위에서부터 시계방향으로 채워지도록 offset 계산
+                // strokeDashoffset이 0이면 완전히 채워진 상태, circumference면 비어있는 상태
+                const offset = circumference * cooldownProgress;
                 gaugeCircle.style.strokeDashoffset = offset;
-                gaugeCircle.style.stroke = 'rgba(255, 255, 255, 0.9)';
             } else {
-                // 쿨타임 완료 - 회색 배경 숨기고 하얀색 게이지만 표시
-                gaugeBackground.style.display = 'none';
-                gaugeCircle.style.strokeDashoffset = 0;
-                gaugeCircle.style.stroke = 'rgba(255, 255, 255, 0.9)';
+                // 돌진 가능 상태: 하얀색 게이지가 완전히 채워져 있음
+                gaugeBackground.style.display = 'none'; // 회색 배경 숨김
+                gaugeCircle.style.strokeDashoffset = 0; // 하얀색 게이지 완전히 채워짐
             }
         }
 
         // 마우스 좌클릭 - 돌진
-        gameArea.addEventListener('mousedown', (e) => {
-            if (e.button === 0 && !isDashing && Date.now() >= dashCooldownEndTime) { // 좌클릭 (돌진 중이 아니고 쿨타임이 끝났을 때만)
+        window.addEventListener('mousedown', (e) => {
+            if (e.button === 0 && !isDashing && Date.now() >= dashCooldownEndTime && !gamePaused) { // 좌클릭 (돌진 중이 아니고 쿨타임이 끝났을 때만, 게임이 일시정지되지 않았을 때만)
                 const dx = targetX - x;
                 const dy = targetY - y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
@@ -159,26 +457,118 @@
                     dashStartY = y;
                     dashForwardProgress = 0;
                     
-                    // 돌진 사용 시 게이지 전체를 즉시 회색으로 변경
-                    gaugeBackground.style.display = 'block';
-                    gaugeBackground.style.strokeDashoffset = 0;
-                    gaugeCircle.style.strokeDashoffset = 50.27; // 하얀색 게이지 초기화
+                    // 돌진 사용 시: 게이지를 즉시 회색으로 변경
+                    gaugeBackground.style.display = 'block'; // 회색 배경 표시
+                    gaugeCircle.style.strokeDashoffset = circumference; // 하얀색 게이지 비우기 (위에서부터 채워지기 시작)
+                    
                     // 쿨타임 시작
                     dashCooldownEndTime = Date.now() + dashCooldown;
                 }
             }
         });
 
+        // 충돌 감지 및 밀기 함수 (속도 기반)
+        function handleCollision() {
+            // 두 원의 중심 좌표 계산
+            const charCenterX = x + radius;
+            const charCenterY = y + radius;
+            const blueCenterX = blueX + radius;
+            const blueCenterY = blueY + radius;
+            
+            // 두 원의 중심 사이 거리 계산
+            const dx = charCenterX - blueCenterX;
+            const dy = charCenterY - blueCenterY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const minDistance = radius * 2 + collisionPadding; // 최소 거리 (여유 공간 포함)
+            
+            // 충돌 감지 (거리가 최소 거리보다 작으면)
+            if (distance < minDistance && distance > 0.01) {
+                // 충돌 방향 벡터 정규화
+                const normalX = dx / distance;
+                const normalY = dy / distance;
+                
+                // 겹침 깊이 계산
+                const overlap = minDistance - distance;
+                
+                // 돌진 중인지 확인
+                if (isDashing && dashPhase === 'forward') {
+                    // 돌진 중: 무조건 돌진 방향으로 상대를 밀어냄
+                    // 밀리는 거리를 돌진 거리의 1.75배로 설정
+                    // 마찰을 고려하여 초기 속도 계산
+                    // 총 거리 = 초기속도 * f / (1 - f) (f = 마찰 계수)
+                    // 초기속도 = 목표거리 * (1 - f) / f
+                    const targetDistance = dashForwardDistance * pushDistanceMultiplier; // 100 * 1.75 = 175
+                    const avgFriction = 0.94; // 평균 마찰 계수 (마찰 약간 증가)
+                    const dashPushSpeed = targetDistance * (1 - avgFriction) / avgFriction;
+                    
+                    // 현재 속도 벡터와 돌진 방향 벡터의 내적 계산
+                    const currentSpeedInDirection = blueVelocityX * dashDirection.x + blueVelocityY * dashDirection.y;
+                    
+                    // 현재 속도보다 새 속도가 크면 업데이트 (돌진 방향으로 밀기)
+                    if (dashPushSpeed > currentSpeedInDirection) {
+                        blueVelocityX = dashDirection.x * dashPushSpeed;
+                        blueVelocityY = dashDirection.y * dashPushSpeed;
+                    }
+                } else {
+                    // 일반 이동 중: 플레이어의 속도 계산
+                    const playerSpeed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
+                    
+                    // 플레이어의 속도를 충돌 방향으로 투영
+                    const relativeVelocity = velocityX * normalX + velocityY * normalY;
+                    
+                    // 플레이어가 파란 원을 밀고 있는 경우 (상대 속도가 양수)
+                    if (relativeVelocity > 0 && playerSpeed > 0.1) {
+                        // 충돌 방향으로 파란 원을 밀어냄
+                        blueVelocityX = normalX * playerSpeed;
+                        blueVelocityY = normalY * playerSpeed;
+                    }
+                }
+                
+                // 겹침 해결 (즉시 분리) - 돌진 중에는 더 강하게 분리
+                const separationRatio = (isDashing && dashPhase === 'forward') ? 1.0 : 0.6;
+                const separationX = normalX * overlap * separationRatio;
+                const separationY = normalY * overlap * separationRatio;
+                
+                // 플레이어는 적게 밀리고, 파란 원은 많이 밀려나도록
+                // 돌진 중에는 플레이어를 거의 밀지 않음
+                const playerPushRatio = (isDashing && dashPhase === 'forward') ? 0.1 : 0.3;
+                const bluePushRatio = 1.0 - playerPushRatio;
+                
+                x += separationX * playerPushRatio;
+                y += separationY * playerPushRatio;
+                blueX -= separationX * bluePushRatio;
+                blueY -= separationY * bluePushRatio;
+            }
+        }
+
+        // 충돌 예측 함수 (이동 전 충돌 방지)
+        function checkCollisionBeforeMove(newX, newY) {
+            const charCenterX = newX + radius;
+            const charCenterY = newY + radius;
+            const blueCenterX = blueX + radius;
+            const blueCenterY = blueY + radius;
+            
+            const dx = charCenterX - blueCenterX;
+            const dy = charCenterY - blueCenterY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const minDistance = radius * 2 + collisionPadding;
+            
+            return distance < minDistance;
+        }
+
         // 캐릭터 위치 업데이트 함수
         function updatePosition() {
+            let newX = x;
+            let newY = y;
+            
             if (isDashing) {
                 const elapsed = Date.now() - dashStartTime;
                 
                 if (elapsed < dashBackDuration) {
                     // 0.1초 동안 뒤로 이동
                     const backProgress = elapsed / dashBackDuration;
-                    x = dashStartX - dashDirection.x * dashBackDistance * backProgress;
-                    y = dashStartY - dashDirection.y * dashBackDistance * backProgress;
+                    newX = dashStartX - dashDirection.x * dashBackDistance * backProgress;
+                    newY = dashStartY - dashDirection.y * dashBackDistance * backProgress;
                 } else {
                     // 앞으로 돌진 (프레임 기반)
                     if (dashPhase === 'back') {
@@ -190,12 +580,12 @@
                     dashForwardProgress += dashForwardSpeed;
                     
                     if (dashForwardProgress < dashForwardDistance) {
-                        x = dashStartX - dashDirection.x * dashBackDistance + dashDirection.x * dashForwardProgress;
-                        y = dashStartY - dashDirection.y * dashBackDistance + dashDirection.y * dashForwardProgress;
+                        newX = dashStartX - dashDirection.x * dashBackDistance + dashDirection.x * dashForwardProgress;
+                        newY = dashStartY - dashDirection.y * dashBackDistance + dashDirection.y * dashForwardProgress;
                     } else {
                         // 돌진 완료
-                        x = dashStartX - dashDirection.x * dashBackDistance + dashDirection.x * dashForwardDistance;
-                        y = dashStartY - dashDirection.y * dashBackDistance + dashDirection.y * dashForwardDistance;
+                        newX = dashStartX - dashDirection.x * dashBackDistance + dashDirection.x * dashForwardDistance;
+                        newY = dashStartY - dashDirection.y * dashBackDistance + dashDirection.y * dashForwardDistance;
                         isDashing = false;
                         dashPhase = 'back';
                     }
@@ -208,42 +598,790 @@
 
                 if (distance > speed) {
                     // 속도만큼 이동
-                    x += (dx / distance) * speed;
-                    y += (dy / distance) * speed;
+                    newX = x + (dx / distance) * speed;
+                    newY = y + (dy / distance) * speed;
                 } else {
                     // 목표 위치에 도달
-                    x = targetX;
-                    y = targetY;
+                    newX = targetX;
+                    newY = targetY;
                 }
+            }
+            
+            // 플레이어 속도 계산
+            velocityX = newX - x;
+            velocityY = newY - y;
+            
+            x = newX;
+            y = newY;
+
+            // 충돌 처리 (밀기 효과) - 돌진 중에는 여러 번 반복하여 겹침 방지
+            const collisionIterations = (isDashing && dashPhase === 'forward') ? 10 : 3;
+            for (let i = 0; i < collisionIterations; i++) {
+                handleCollision();
+            }
+            
+            // 파란 원을 속도에 따라 이동
+            blueX += blueVelocityX;
+            blueY += blueVelocityY;
+            
+            // 파란 원의 속도 감소 (마찰 적용) - 자연스러운 점진적 감속
+            const baseFriction = 0.94; // 기본 마찰 계수 (0.94 = 매 프레임 6% 감소, 마찰 약간 증가)
+            const blueSpeed = Math.sqrt(blueVelocityX * blueVelocityX + blueVelocityY * blueVelocityY);
+            
+            // 속도가 빠를수록 더 빠르게 감속 (더 자연스러운 감속)
+            // 돌진 충돌 시 목표 속도 계산 (거리 기반)
+            const targetPushDistance = dashForwardDistance * pushDistanceMultiplier;
+            const avgFriction = 0.94; // 평균 마찰 계수 약간 증가 (0.93 -> 0.94)
+            const targetPushSpeed = targetPushDistance * (1 - avgFriction) / avgFriction;
+            const speedFactor = Math.min(1.0, blueSpeed / targetPushSpeed);
+            const friction = baseFriction - (speedFactor * 0.03); // 빠른 속도일 때 더 빠르게 감속
+            
+            blueVelocityX *= friction;
+            blueVelocityY *= friction;
+            
+            // 속도가 매우 작으면 정지
+            const finalBlueSpeed = Math.sqrt(blueVelocityX * blueVelocityX + blueVelocityY * blueVelocityY);
+            if (finalBlueSpeed < 0.1) {
+                blueVelocityX = 0;
+                blueVelocityY = 0;
             }
 
             // 게임 영역 경계 체크
-            const maxX = gameArea.offsetWidth - characterSize;
-            const maxY = gameArea.offsetHeight - characterSize;
+            const maxX = Math.max(0, window.innerWidth - characterSize);
+            const maxY = Math.max(0, window.innerHeight - characterSize);
 
             x = Math.max(0, Math.min(x, maxX));
             y = Math.max(0, Math.min(y, maxY));
+            
+            // 파란색 원 경계 체크 (벽에 부딪히면 속도 반전)
+            if (blueX <= 0 || blueX >= maxX) {
+                blueVelocityX *= -0.8; // 약간의 반발력
+                blueX = Math.max(0, Math.min(blueX, maxX));
+            }
+            if (blueY <= 0 || blueY >= maxY) {
+                blueVelocityY *= -0.8; // 약간의 반발력
+                blueY = Math.max(0, Math.min(blueY, maxY));
+            }
 
             character.style.left = x + 'px';
             character.style.top = y + 'px';
+            blueCircle.style.left = blueX + 'px';
+            blueCircle.style.top = blueY + 'px';
+            
+            // 플레이어가 장판 안에 있는지 확인 (동적 장판 크기 반영)
+            const charCenterX = x + radius;
+            const charCenterY = y + radius;
+            const currentPlatformRadius = platformRadius * platformSizeMultiplier;
+            const platformCenterX = platformX + currentPlatformRadius;
+            const platformCenterY = platformY + currentPlatformRadius;
+            
+            const dx = charCenterX - platformCenterX;
+            const dy = charCenterY - platformCenterY;
+            const distanceToPlatform = Math.sqrt(dx * dx + dy * dy);
+            
+            // 장판이 표시되어 있을 때만 어두워지는 효과 적용
+            if (lightPlatform.style.display !== 'none') {
+                // 장판 밖에 있으면 어둡게
+                if (distanceToPlatform > currentPlatformRadius) {
+                    character.style.filter = 'brightness(0.3)'; // 어둡게
+                } else {
+                    character.style.filter = 'brightness(1.0)'; // 밝게
+                }
+            }
+            
+            // 파란 원이 장판 안에 있는지 확인
+            const blueCenterX = blueX + radius;
+            const blueCenterY = blueY + radius;
+            const blueDx = blueCenterX - platformCenterX;
+            const blueDy = blueCenterY - platformCenterY;
+            const blueDistanceToPlatform = Math.sqrt(blueDx * blueDx + blueDy * blueDy);
+            
+            // 장판이 표시되어 있을 때만 어두워지는 효과 적용
+            if (lightPlatform.style.display !== 'none') {
+                // 장판 밖에 있으면 어둡게
+                if (blueDistanceToPlatform > currentPlatformRadius) {
+                    blueCircle.style.filter = 'brightness(0.3)'; // 어둡게
+                } else {
+                    blueCircle.style.filter = 'brightness(1.0)'; // 밝게
+                }
+            }
+            
+            // 이전 위치 저장
+            prevX = x;
+            prevY = y;
+        }
+
+        // 빛 장판 위치 업데이트 함수
+        function updateLightPlatform() {
+            if (gamePaused) return; // 라운드 종료 시 장판 업데이트 중단
+            
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+            const platformCenterX = platformX + platformRadius;
+            const platformCenterY = platformY + platformRadius;
+            
+            // 벽으로부터의 거리 계산
+            const distToLeft = platformCenterX;
+            const distToRight = window.innerWidth - platformCenterX;
+            const distToTop = platformCenterY;
+            const distToBottom = window.innerHeight - platformCenterY;
+            const minDistToWall = Math.min(distToLeft, distToRight, distToTop, distToBottom);
+            
+            const now = Date.now();
+            const elapsed = now - platformDirectionChangeTime;
+            
+            // 이동 전 경계 상태 확인
+            const maxX = window.innerWidth - platformSize;
+            const maxY = window.innerHeight - platformSize;
+            const wasAtBoundary = (platformX <= 0 || platformX >= maxX || platformY <= 0 || platformY >= maxY);
+            
+            // 빛 장판 이동 (게이지 효과 적용)
+            const currentPlatformSpeed = platformSpeed * platformSpeedMultiplier;
+            platformX += platformDirectionX * currentPlatformSpeed;
+            platformY += platformDirectionY * currentPlatformSpeed;
+            
+            // 경계 체크 (장판이 화면 밖으로 나가지 않도록)
+            const currentPlatformSize = platformSize * platformSizeMultiplier;
+            const currentMaxX = window.innerWidth - currentPlatformSize;
+            const currentMaxY = window.innerHeight - currentPlatformSize;
+            platformX = Math.max(0, Math.min(platformX, currentMaxX));
+            platformY = Math.max(0, Math.min(platformY, currentMaxY));
+            
+            // 벽에 닿은 순간 감지 (이전에 경계에 없었는데 지금 경계에 있으면)
+            const isAtBoundary = (platformX <= 0 || platformX >= maxX || platformY <= 0 || platformY >= maxY);
+            
+            if (isAtBoundary && !wasAtBoundary) {
+                // 벽에 닿은 순간: 원래 이동 취소하고 중앙 방향으로 변경
+                const newPlatformCenterX = platformX + platformRadius;
+                const newPlatformCenterY = platformY + platformRadius;
+                const dxToCenter = centerX - newPlatformCenterX;
+                const dyToCenter = centerY - newPlatformCenterY;
+                const distToCenter = Math.sqrt(dxToCenter * dxToCenter + dyToCenter * dyToCenter);
+                
+                if (distToCenter > 0) {
+                    // 중앙 방향으로 이동
+                    platformDirectionX = dxToCenter / distToCenter;
+                    platformDirectionY = dyToCenter / distToCenter;
+                    // 방향 변경 시간 리셋 (5~10초 동안 중앙으로 이동)
+                    platformDirectionChangeTime = now;
+                    platformDirectionDuration = 5000 + Math.random() * 5000;
+                }
+            } else if (elapsed >= platformDirectionDuration) {
+                // 5~10초가 지나면 새로운 랜덤 방향 선택
+                platformDirectionX = (Math.random() - 0.5) * 2;
+                platformDirectionY = (Math.random() - 0.5) * 2;
+                dirLength = Math.sqrt(platformDirectionX * platformDirectionX + platformDirectionY * platformDirectionY);
+                platformDirectionX /= dirLength;
+                platformDirectionY /= dirLength;
+                
+                // 새로운 방향 변경 시간 설정
+                platformDirectionChangeTime = now;
+                platformDirectionDuration = 5000 + Math.random() * 5000; // 5~10초 (랜덤)
+            }
+            
+            // 빛 장판 크기 및 위치 업데이트 (게이지 효과 적용)
+            const platformDisplaySize = platformSize * platformSizeMultiplier;
+            lightPlatform.style.width = platformDisplaySize + 'px';
+            lightPlatform.style.height = platformDisplaySize + 'px';
+            lightPlatform.style.left = platformX + 'px';
+            lightPlatform.style.top = platformY + 'px';
+        }
+
+        // 상단 게이지 업데이트 함수
+        function updateTopGauges() {
+            const now = Date.now();
+            let gauge1Progress = 0;
+            let gauge2Progress = 0;
+            let gauge3Progress = 0;
+            let gauge4Progress = 0;
+            
+            // 게이지 1 업데이트
+            if (!gauge1Completed) {
+                let gauge1Elapsed = now - topGauge1StartTime;
+                if (gauge1Elapsed >= topGaugeDuration) {
+                    gauge1Completed = true;
+                    topGauge1.style.width = '100%';
+                    gauge1Progress = 100;
+                } else {
+                    gauge1Progress = (gauge1Elapsed / topGaugeDuration) * 100;
+                    topGauge1.style.width = gauge1Progress + '%';
+                }
+            } else {
+                topGauge1.style.width = '100%';
+                gauge1Progress = 100;
+            }
+            
+            // 게이지 2 업데이트
+            if (!gauge2Completed) {
+                let gauge2Elapsed = now - topGauge2StartTime;
+                if (gauge2Elapsed >= topGaugeDuration) {
+                    gauge2Completed = true;
+                    topGauge2.style.width = '100%';
+                    gauge2Progress = 100;
+                } else {
+                    gauge2Progress = (gauge2Elapsed / topGaugeDuration) * 100;
+                    topGauge2.style.width = gauge2Progress + '%';
+                }
+            } else {
+                topGauge2.style.width = '100%';
+                gauge2Progress = 100;
+            }
+            
+            // 게이지 3 업데이트
+            if (!gauge3Completed) {
+                let gauge3Elapsed = now - topGauge3StartTime;
+                if (gauge3Elapsed >= topGaugeDuration) {
+                    gauge3Completed = true;
+                    topGauge3.style.width = '100%';
+                    gauge3Progress = 100;
+                } else {
+                    gauge3Progress = (gauge3Elapsed / topGaugeDuration) * 100;
+                    topGauge3.style.width = gauge3Progress + '%';
+                }
+            } else {
+                topGauge3.style.width = '100%';
+                gauge3Progress = 100;
+            }
+            
+            // 게이지 4 업데이트
+            if (!gauge4Completed) {
+                let gauge4Elapsed = now - topGauge4StartTime;
+                if (gauge4Elapsed >= topGaugeDuration) {
+                    gauge4Completed = true;
+                    topGauge4.style.width = '100%';
+                    gauge4Progress = 100;
+                } else {
+                    gauge4Progress = (gauge4Elapsed / topGaugeDuration) * 100;
+                    topGauge4.style.width = gauge4Progress + '%';
+                }
+            } else {
+                topGauge4.style.width = '100%';
+                gauge4Progress = 100;
+            }
+            
+            // 현재 활성화된 게이지 레벨 결정
+            let newGaugeLevel = 1;
+            if (gauge4Completed || gauge4Progress > 0) newGaugeLevel = 4;
+            else if (gauge3Completed || gauge3Progress > 0) newGaugeLevel = 3;
+            else if (gauge2Completed || gauge2Progress > 0) newGaugeLevel = 2;
+            else if (gauge1Completed || gauge1Progress > 0) newGaugeLevel = 1;
+            
+            // 게이지 레벨 변경 시 효과 적용
+            if (newGaugeLevel !== currentGaugeLevel) {
+                currentGaugeLevel = newGaugeLevel;
+                
+                // 게이지 2: 장판 크기 15% 감소 시작 (한 번만)
+                if (currentGaugeLevel === 2 && !gauge2SizeReduced && !platformSizeChangeActive) {
+                    gauge2SizeReduced = true;
+                    gauge2BaseMultiplier = platformSizeMultiplier;
+                    platformSizeChangeActive = true;
+                    platformSizeChangeStartTime = now;
+                }
+                
+                // 게이지 3: 장판 속도 25% 증가
+                if (currentGaugeLevel === 3) {
+                    platformSpeedMultiplier = 1.25;
+                } else if (currentGaugeLevel < 3) {
+                    platformSpeedMultiplier = 1.0;
+                }
+                
+                // 게이지 4: 장판 크기 15% 감소 시작 (한 번만)
+                if (currentGaugeLevel === 4 && !gauge4SizeReduced && !platformSizeChangeActive) {
+                    gauge4SizeReduced = true;
+                    gauge4BaseMultiplier = platformSizeMultiplier;
+                    platformSizeChangeActive = true;
+                    platformSizeChangeStartTime = now;
+                }
+            }
+            
+            // 장판 크기 변경 처리
+            if (platformSizeChangeActive) {
+                const sizeChangeElapsed = now - platformSizeChangeStartTime;
+                if (sizeChangeElapsed < platformSizeChangeDuration) {
+                    // 5초에 걸쳐 15% 감소
+                    const sizeChangeProgress = sizeChangeElapsed / platformSizeChangeDuration;
+                    const targetMultiplier = 0.85; // 15% 감소
+                    const baseMultiplier = currentGaugeLevel === 2 ? gauge2BaseMultiplier : gauge4BaseMultiplier;
+                    platformSizeMultiplier = baseMultiplier - (sizeChangeProgress * (baseMultiplier - baseMultiplier * targetMultiplier));
+                } else {
+                    // 크기 변경 완료
+                    const baseMultiplier = currentGaugeLevel === 2 ? gauge2BaseMultiplier : gauge4BaseMultiplier;
+                    platformSizeMultiplier = baseMultiplier * 0.85;
+                    platformSizeChangeActive = false;
+                }
+            }
+        }
+        
+        // 체력 시스템 업데이트 함수
+        function updateHealth() {
+            if (gamePaused) return; // 라운드 종료 시 데미지 중단
+            
+            const now = Date.now();
+            
+            // 플레이어가 장판 밖에 있는지 확인
+            const charCenterX = x + radius;
+            const charCenterY = y + radius;
+            const platformCenterX = platformX + (platformRadius * platformSizeMultiplier);
+            const platformCenterY = platformY + (platformRadius * platformSizeMultiplier);
+            
+            const dx = charCenterX - platformCenterX;
+            const dy = charCenterY - platformCenterY;
+            const distanceToPlatform = Math.sqrt(dx * dx + dy * dy);
+            const currentPlatformRadius = platformRadius * platformSizeMultiplier;
+            
+            const isOutsidePlatform = distanceToPlatform > currentPlatformRadius;
+            
+            // 장판 밖에 있으면 데미지 (0.1초 단위)
+            if (isOutsidePlatform && now - lastDamageTime >= damageInterval) {
+                let damage = 0;
+                
+                // 게이지 레벨에 따른 데미지 (0.1초당)
+                if (currentGaugeLevel === 1 || currentGaugeLevel === 2) {
+                    damage = 0.05; // 초당 0.5 데미지 = 0.1초당 0.05 데미지
+                } else if (currentGaugeLevel === 3) {
+                    damage = 0.075; // 초당 0.75 데미지 = 0.1초당 0.075 데미지
+                } else if (currentGaugeLevel === 4) {
+                    damage = 0.15; // 초당 1.5 데미지 = 0.1초당 0.15 데미지
+                }
+                
+                currentHealth -= damage;
+                lastDamageTime = now;
+                
+                if (currentHealth <= 0) {
+                    currentHealth = 0;
+                    // 플레이어 패배 - 라운드 종료
+                    if (!isRoundEnded) {
+                        endRound('enemy');
+                    }
+                }
+                
+                // 플레이어 체력 게이지 업데이트
+                const healthPercent = Math.max(0, (currentHealth / maxHealth) * 100);
+                playerHealthFill.style.width = healthPercent + '%';
+            }
+            
+            // 상대(파란 원)가 장판 밖에 있는지 확인
+            const blueCenterX = blueX + radius;
+            const blueCenterY = blueY + radius;
+            const blueDx = blueCenterX - platformCenterX;
+            const blueDy = blueCenterY - platformCenterY;
+            const blueDistanceToPlatform = Math.sqrt(blueDx * blueDx + blueDy * blueDy);
+            const blueIsOutsidePlatform = blueDistanceToPlatform > currentPlatformRadius;
+            
+            // 상대 데미지 처리 (0.1초 단위)
+            if (blueIsOutsidePlatform && now - lastEnemyDamageTime >= damageInterval) {
+                let damage = 0;
+                
+                // 게이지 레벨에 따른 데미지 (0.1초당)
+                if (currentGaugeLevel === 1 || currentGaugeLevel === 2) {
+                    damage = 0.05; // 초당 0.5 데미지 = 0.1초당 0.05 데미지
+                } else if (currentGaugeLevel === 3) {
+                    damage = 0.075; // 초당 0.75 데미지 = 0.1초당 0.075 데미지
+                } else if (currentGaugeLevel === 4) {
+                    damage = 0.15; // 초당 1.5 데미지 = 0.1초당 0.15 데미지
+                }
+                
+                enemyHealth -= damage;
+                lastEnemyDamageTime = now;
+                
+                if (enemyHealth <= 0) {
+                    enemyHealth = 0;
+                    // 상대 패배 - 라운드 종료
+                    if (!isRoundEnded) {
+                        endRound('player');
+                    }
+                }
+                
+                // 상대 체력 게이지 업데이트
+                const enemyHealthPercent = Math.max(0, (enemyHealth / maxHealth) * 100);
+                enemyHealthFill.style.width = enemyHealthPercent + '%';
+            }
+        }
+        
+        // 라운드 종료 함수
+        function endRound(winner) {
+            if (isRoundEnded) return;
+            
+            isRoundEnded = true;
+            gamePaused = true;
+            roundEndReason = winner;
+            
+            // 승리 처리
+            if (winner === 'player') {
+                playerWins++;
+            } else {
+                enemyWins++;
+            }
+            
+            // 장판 숨기기
+            lightPlatform.style.display = 'none';
+            
+            // 어두워지는 효과 제거
+            character.style.filter = 'brightness(1.0)';
+            blueCircle.style.filter = 'brightness(1.0)';
+            
+            // 플레이어 위치를 좌우 벽 쪽으로 이동
+            const margin = 50; // 벽에서의 여백
+            x = margin;
+            y = window.innerHeight / 2 - characterSize / 2;
+            blueX = window.innerWidth - characterSize - margin;
+            blueY = window.innerHeight / 2 - characterSize / 2;
+            
+            // 위치 즉시 적용
+            character.style.left = x + 'px';
+            character.style.top = y + 'px';
+            blueCircle.style.left = blueX + 'px';
+            blueCircle.style.top = blueY + 'px';
+            
+            // 목표 위치도 업데이트 (이동 방지)
+            targetX = x;
+            targetY = y;
+            blueVelocityX = 0;
+            blueVelocityY = 0;
+            
+            // 강화구슬 생성 및 표시
+            showUpgradeOrbs();
+        }
+        
+        // 강화구슬 표시 함수
+        function showUpgradeOrbs() {
+            // 기존 구슬 제거
+            upgradeOrbsContainer.innerHTML = '';
+            selectedOrbs = [];
+            
+            // 접촉 시간 맵 초기화
+            orbContactTimes.clear();
+            
+            // 강화구슬 3개 생성 (랜덤 효과)
+            const orbEffects = [
+                { name: 'Speed Boost', value: 1.2 },
+                { name: 'Health Boost', value: 2 },
+                { name: 'Dash Cooldown', value: 0.8 },
+                { name: 'Damage Reduction', value: 0.8 },
+                { name: 'Platform Size', value: 1.1 }
+            ];
+            
+            // 랜덤으로 3개 선택
+            const selectedEffects = [];
+            const availableEffects = [...orbEffects];
+            for (let i = 0; i < 3; i++) {
+                const randomIndex = Math.floor(Math.random() * availableEffects.length);
+                selectedEffects.push(availableEffects[randomIndex]);
+                availableEffects.splice(randomIndex, 1);
+            }
+            
+            // 구슬 배치 (삼각형으로 화면 중앙에 배치)
+            selectedEffects.forEach((effect, index) => {
+                const orb = document.createElement('div');
+                orb.className = 'upgradeOrb';
+                orb.dataset.effect = effect.name;
+                orb.dataset.value = effect.value;
+                
+                // 화면 중앙에 삼각형으로 배치
+                const centerX = window.innerWidth / 2;
+                const centerY = window.innerHeight / 2;
+                const triangleSize = 120; // 삼각형 크기
+                
+                let orbX, orbY;
+                if (index === 0) {
+                    // 위쪽 구슬
+                    orbX = centerX;
+                    orbY = centerY - triangleSize;
+                } else if (index === 1) {
+                    // 왼쪽 아래 구슬
+                    orbX = centerX - triangleSize * Math.cos(Math.PI / 6);
+                    orbY = centerY + triangleSize * Math.sin(Math.PI / 6);
+                } else {
+                    // 오른쪽 아래 구슬
+                    orbX = centerX + triangleSize * Math.cos(Math.PI / 6);
+                    orbY = centerY + triangleSize * Math.sin(Math.PI / 6);
+                }
+                
+                // 구슬의 중심이 정확히 위치하도록 조정
+                orb.style.left = (orbX - 30) + 'px';
+                orb.style.top = (orbY - 30) + 'px';
+                
+                // 초기 크기 설정
+                orb.style.transform = 'scale(1.0)';
+                
+                upgradeOrbsContainer.appendChild(orb);
+            });
+            
+            // 라운드 종료 화면 표시
+            roundEndScreen.style.display = 'flex';
+            
+            // 진 플레이어부터 선택 시작
+            selectionTurn = roundEndReason === 'player' ? 'enemy' : 'player';
+            waitingForSelection = true;
+        }
+        
+        // 구슬 선택 확인 함수
+        function checkOrbSelection() {
+            if (!waitingForSelection || selectedOrbs.length >= 2) return;
+            
+            const orbs = document.querySelectorAll('.upgradeOrb');
+            const currentPlayer = selectionTurn === 'player' ? character : blueCircle;
+            const now = Date.now();
+            
+            // 플레이어의 화면 좌표 계산
+            const playerRect = currentPlayer.getBoundingClientRect();
+            const playerCenterX = playerRect.left + playerRect.width / 2;
+            const playerCenterY = playerRect.top + playerRect.height / 2;
+            
+            orbs.forEach(orb => {
+                const orbRect = orb.getBoundingClientRect();
+                const orbCenterX = orbRect.left + orbRect.width / 2;
+                const orbCenterY = orbRect.top + orbRect.height / 2;
+                
+                const distance = Math.sqrt(
+                    Math.pow(playerCenterX - orbCenterX, 2) + 
+                    Math.pow(playerCenterY - orbCenterY, 2)
+                );
+                
+                // 구슬에 닿았는지 확인
+                const isInContact = distance < 50;
+                
+                if (isInContact) {
+                    // 접촉 시작 시간이 없으면 기록
+                    if (!orbContactTimes.has(orb)) {
+                        orbContactTimes.set(orb, now);
+                    }
+                    
+                    // 접촉 시간 확인
+                    const contactStartTime = orbContactTimes.get(orb);
+                    const contactDuration = now - contactStartTime;
+                    
+                    // 접촉 진행도 계산 (0.0 ~ 1.0)
+                    const contactProgress = Math.min(1.0, contactDuration / orbSelectionDuration);
+                    
+                    // 접촉 진행도에 따라 크기 조정 (1.0 -> 0.75, 25% 감소)
+                    const minScale = 0.75; // 최소 크기 (25% 감소)
+                    const currentScale = 1.0 - (contactProgress * (1.0 - minScale));
+                    orb.style.transform = `scale(${currentScale})`;
+                    
+                    // 2초 이상 닿아있으면 선택
+                    if (contactDuration >= orbSelectionDuration) {
+                        // 빛나는 효과 생성
+                        const flash = document.createElement('div');
+                        flash.className = 'orbFlash';
+                        
+                        // 구슬의 색깔 가져오기 (배경 그라데이션에서 색상 추출)
+                        const computedStyle = window.getComputedStyle(orb);
+                        const bgColor = computedStyle.backgroundImage;
+                        // 그라데이션에서 색상 추출 (간단한 방법: 보라색 계열 사용)
+                        const orbColor = 'rgba(200, 150, 255, 0.6)'; // 구슬의 주요 색상
+                        flash.style.background = `radial-gradient(circle, ${orbColor}, transparent)`;
+                        flash.style.boxShadow = `0 0 70px ${orbColor}, 0 0 100px ${orbColor}`;
+                        
+                        // 구슬 위치에 빛나는 효과 배치
+                        flash.style.left = orbCenterX + 'px';
+                        flash.style.top = orbCenterY + 'px';
+                        upgradeOrbsContainer.appendChild(flash);
+                        
+                        // 애니메이션 종료 후 제거
+                        setTimeout(() => {
+                            flash.remove();
+                        }, 500);
+                        
+                        selectedOrbs.push({
+                            player: selectionTurn,
+                            effect: orb.dataset.effect,
+                            value: parseFloat(orb.dataset.value)
+                        });
+                        
+                        // 접촉 시간 기록 제거
+                        orbContactTimes.delete(orb);
+                        
+                        // 선택된 구슬 제거
+                        orb.remove();
+                        
+                        // 다음 플레이어 차례로 변경
+                        if (selectedOrbs.length === 1) {
+                            selectionTurn = roundEndReason === 'player' ? 'player' : 'enemy';
+                        } else {
+                            // 두 플레이어 모두 선택 완료 - 다음 라운드 시작
+                            waitingForSelection = false;
+                            startNextRound();
+                        }
+                    }
+                } else {
+                    // 구슬에서 멀어지면 접촉 시간 리셋 및 크기 복원
+                    if (orbContactTimes.has(orb)) {
+                        orbContactTimes.delete(orb);
+                    }
+                    // 빠르게 원래 크기로 복원 (transition이 적용됨)
+                    orb.style.transform = 'scale(1.0)';
+                }
+            });
+        }
+        
+        // 다음 라운드 시작 함수
+        function startNextRound() {
+            // 승리 조건 확인
+            if (playerWins >= 3) {
+                alert('플레이어 승리!');
+                resetGame();
+                return;
+            }
+            if (enemyWins >= 3) {
+                alert('상대 승리!');
+                resetGame();
+                return;
+            }
+            
+            // 라운드 종료 화면 숨기기
+            roundEndScreen.style.display = 'none';
+            
+            // 다음 라운드로
+            currentRound++;
+            roundInfo.textContent = `Round ${currentRound}`;
+            
+            // 게임 상태 리셋
+            isRoundEnded = false;
+            gamePaused = false;
+            
+            // 체력 회복
+            currentHealth = maxHealth;
+            enemyHealth = maxHealth;
+            playerHealthFill.style.width = '100%';
+            enemyHealthFill.style.width = '100%';
+            
+            // 장판 다시 표시
+            lightPlatform.style.display = 'block';
+            
+            // 게이지 리셋
+            gauge1Completed = false;
+            gauge2Completed = false;
+            gauge3Completed = false;
+            gauge4Completed = false;
+            const now = Date.now();
+            topGauge1StartTime = now;
+            topGauge2StartTime = now + topGaugeDuration;
+            topGauge3StartTime = now + topGaugeDuration * 2;
+            topGauge4StartTime = now + topGaugeDuration * 3;
+            
+            // 게이지 UI 리셋 (width를 0%로 설정)
+            topGauge1.style.width = '0%';
+            topGauge2.style.width = '0%';
+            topGauge3.style.width = '0%';
+            topGauge4.style.width = '0%';
+            
+            // 장판 효과 리셋
+            platformSizeMultiplier = 1.0;
+            platformSpeedMultiplier = 1.0;
+            platformSizeChangeActive = false;
+            gauge2SizeReduced = false;
+            gauge4SizeReduced = false;
+            currentGaugeLevel = 1;
+            
+            // 게이지 진행도 변수 리셋 (다음 업데이트를 위해)
+            // gaugeXProgress 변수는 updateTopGauges 함수 내에서 지역 변수로 선언되므로 자동으로 리셋됨
+            
+            // 위치 리셋
+            const pos = initializePosition();
+            x = pos.x;
+            y = pos.y;
+            blueX = window.innerWidth / 2 - characterSize / 2 + 100;
+            blueY = window.innerHeight / 2 - characterSize / 2;
+            character.style.left = x + 'px';
+            character.style.top = y + 'px';
+            blueCircle.style.left = blueX + 'px';
+            blueCircle.style.top = blueY + 'px';
+            
+            platformX = window.innerWidth / 2 - platformRadius;
+            platformY = window.innerHeight / 2 - platformRadius;
+            lightPlatform.style.left = platformX + 'px';
+            lightPlatform.style.top = platformY + 'px';
+        }
+        
+        // 게임 리셋 함수
+        function resetGame() {
+            currentRound = 1;
+            playerWins = 0;
+            enemyWins = 0;
+            roundInfo.textContent = `Round ${currentRound}`;
+            startNextRound();
         }
 
         // 게임 루프
         function gameLoop() {
+            // 플레이어 이동은 항상 가능 (구슬 선택을 위해)
             updatePosition();
-            updateGauge();
+            
+            if (!gamePaused) {
+                updateGauge();
+                updateLightPlatform();
+                updateTopGauges();
+                updateHealth();
+            }
+            
+            // 구슬 선택 확인 (라운드 종료 시)
+            if (waitingForSelection) {
+                checkOrbSelection();
+            }
+            
             requestAnimationFrame(gameLoop);
         }
 
-        // 초기 위치 설정
-        updatePosition();
-        // 초기 게이지 상태 (쿨타임 없음)
-        gaugeBackground.style.display = 'none';
-        updateGauge();
+        // 초기화 함수
+        function init() {
+            // 초기 위치 재설정 (화면 중앙)
+            const pos = initializePosition();
+            x = pos.x;
+            y = pos.y;
+            prevX = x;
+            prevY = y;
+            targetX = x;
+            targetY = y;
+            velocityX = 0;
+            velocityY = 0;
+            
+            // 캐릭터 초기 위치 설정
+            character.style.left = x + 'px';
+            character.style.top = y + 'px';
+            
+            // 파란색 원 초기 위치 설정
+            blueX = window.innerWidth / 2 - characterSize / 2 + 100;
+            blueY = window.innerHeight / 2 - characterSize / 2;
+            blueVelocityX = 0;
+            blueVelocityY = 0;
+            blueCircle.style.left = blueX + 'px';
+            blueCircle.style.top = blueY + 'px';
+            
+            // 빛 장판 초기 위치 설정 (화면 중앙)
+            platformX = window.innerWidth / 2 - platformRadius;
+            platformY = window.innerHeight / 2 - platformRadius;
+            lightPlatform.style.left = platformX + 'px';
+            lightPlatform.style.top = platformY + 'px';
+            
+            // 빛 장판 방향 초기화
+            platformDirectionX = (Math.random() - 0.5) * 2;
+            platformDirectionY = (Math.random() - 0.5) * 2;
+            dirLength = Math.sqrt(platformDirectionX * platformDirectionX + platformDirectionY * platformDirectionY);
+            platformDirectionX /= dirLength;
+            platformDirectionY /= dirLength;
+            platformDirectionChangeTime = Date.now();
+            platformDirectionDuration = 5000 + Math.random() * 5000;
+            
+            // 초기 게이지 상태: 돌진 가능 상태 (하얀색 게이지 완전히 채워짐)
+            updateGauge();
+            
+            // 체력 초기화
+            currentHealth = maxHealth;
+            enemyHealth = maxHealth;
+            playerHealthFill.style.width = '100%';
+            enemyHealthFill.style.width = '100%';
+            
+            // 게임 루프 시작
+            gameLoop();
+        }
 
-        // 게임 루프 시작
-        gameLoop();
+        // DOM이 완전히 로드된 후 초기화
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
     </script>
 </body>
 </html>
-
