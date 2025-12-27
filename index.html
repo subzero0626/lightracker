@@ -1,1 +1,250 @@
-# lightracker
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WASD 캐릭터 이동</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: #2c3e50;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            cursor: none; /* 기본 커서 숨김 */
+        }
+
+        #gameArea {
+            width: 100vw;
+            height: 100vh;
+            background: #2c3e50;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #cursorGauge {
+            width: 20px;
+            height: 20px;
+            position: fixed;
+            pointer-events: none;
+            z-index: 10000;
+            transform: translate(-50%, -50%);
+        }
+
+        #cursorGauge svg {
+            display: block;
+        }
+
+        #gaugeBackground {
+            display: none;
+        }
+
+        #character {
+            width: 50px;
+            height: 50px;
+            background: #e74c3c;
+            opacity: 0.8;
+            border-radius: 50%;
+            position: absolute;
+            transition: all 0.1s ease-out;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+    </style>
+</head>
+<body>
+    <div id="gameArea">
+        <div id="character"></div>
+        <div id="cursorGauge">
+            <svg width="20" height="20" viewBox="0 0 20 20">
+                <circle cx="10" cy="10" r="8" fill="none" stroke="rgba(255, 255, 255, 0.3)" stroke-width="4.5"/>
+                <circle cx="10" cy="10" r="8" fill="none" stroke="rgba(128, 128, 128, 0.9)" stroke-width="4.5" 
+                        stroke-dasharray="50.27" 
+                        stroke-dashoffset="0" 
+                        transform="rotate(-90 10 10)"
+                        id="gaugeBackground"/>
+                <circle cx="10" cy="10" r="8" fill="none" stroke="rgba(255, 255, 255, 0.9)" stroke-width="4.5" 
+                        stroke-dasharray="50.27" 
+                        stroke-dashoffset="50.27" 
+                        transform="rotate(-90 10 10)"
+                        id="gaugeCircle"/>
+            </svg>
+        </div>
+    </div>
+
+    <script>
+        const character = document.getElementById('character');
+        const gameArea = document.getElementById('gameArea');
+        const cursorGauge = document.getElementById('cursorGauge');
+        const gaugeCircle = document.getElementById('gaugeCircle');
+        const gaugeBackground = document.getElementById('gaugeBackground');
+
+        let x = gameArea.offsetWidth / 2 - 25;  // 캐릭터의 시작 X 위치 (중앙)
+        let y = gameArea.offsetHeight / 2 - 25; // 캐릭터의 시작 Y 위치 (중앙)
+        const speed = 3; // 이동 속도
+        const characterSize = 50; // 캐릭터 크기
+        let targetX = x; // 목표 X 위치
+        let targetY = y; // 목표 Y 위치
+        
+        // 돌진 관련 변수
+        let isDashing = false;
+        let dashPhase = 'back'; // 'back' 또는 'forward'
+        let dashDirection = { x: 0, y: 0 };
+        let dashStartTime = 0;
+        let dashStartX = 0;
+        let dashStartY = 0;
+        let dashForwardProgress = 0;
+        let dashCooldownEndTime = 0; // 쿨타임 종료 시간
+        const dashBackDuration = 100; // 0.1초 (밀리초)
+        const dashBackDistance = 10; // 뒤로 가는 거리
+        const dashForwardDistance = 100; // 앞으로 돌진 거리
+        const dashForwardSpeed = 15; // 앞으로 돌진 속도 (픽셀/프레임)
+        const dashCooldown = 1000; // 쿨타임 1초 (밀리초)
+
+        // 마우스 위치 추적
+        gameArea.addEventListener('mousemove', (e) => {
+            const rect = gameArea.getBoundingClientRect();
+            targetX = e.clientX - rect.left - characterSize / 2;
+            targetY = e.clientY - rect.top - characterSize / 2;
+            
+            // 커서 게이지 위치 업데이트
+            cursorGauge.style.left = e.clientX + 'px';
+            cursorGauge.style.top = e.clientY + 'px';
+        });
+
+        // 게이지 업데이트 함수
+        function updateGauge() {
+            const now = Date.now();
+            const circumference = 2 * Math.PI * 8; // 원의 둘레 (r=8)
+            
+            if (now < dashCooldownEndTime) {
+                // 쿨타임 중 - 회색 배경 전체 표시
+                gaugeBackground.style.strokeDashoffset = 0;
+                gaugeBackground.style.display = 'block';
+                
+                // 위쪽부터 시계방향으로 하얀색 게이지가 차오름
+                const cooldownProgress = (dashCooldownEndTime - now) / dashCooldown;
+                const offset = circumference * (1 - cooldownProgress);
+                gaugeCircle.style.strokeDashoffset = offset;
+                gaugeCircle.style.stroke = 'rgba(255, 255, 255, 0.9)';
+            } else {
+                // 쿨타임 완료 - 회색 배경 숨기고 하얀색 게이지만 표시
+                gaugeBackground.style.display = 'none';
+                gaugeCircle.style.strokeDashoffset = 0;
+                gaugeCircle.style.stroke = 'rgba(255, 255, 255, 0.9)';
+            }
+        }
+
+        // 마우스 좌클릭 - 돌진
+        gameArea.addEventListener('mousedown', (e) => {
+            if (e.button === 0 && !isDashing && Date.now() >= dashCooldownEndTime) { // 좌클릭 (돌진 중이 아니고 쿨타임이 끝났을 때만)
+                const dx = targetX - x;
+                const dy = targetY - y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > 0.1) {
+                    // 현재 이동 방향 정규화
+                    dashDirection.x = dx / distance;
+                    dashDirection.y = dy / distance;
+                    isDashing = true;
+                    dashPhase = 'back';
+                    dashStartTime = Date.now();
+                    dashStartX = x;
+                    dashStartY = y;
+                    dashForwardProgress = 0;
+                    
+                    // 돌진 사용 시 게이지 전체를 즉시 회색으로 변경
+                    gaugeBackground.style.display = 'block';
+                    gaugeBackground.style.strokeDashoffset = 0;
+                    gaugeCircle.style.strokeDashoffset = 50.27; // 하얀색 게이지 초기화
+                    // 쿨타임 시작
+                    dashCooldownEndTime = Date.now() + dashCooldown;
+                }
+            }
+        });
+
+        // 캐릭터 위치 업데이트 함수
+        function updatePosition() {
+            if (isDashing) {
+                const elapsed = Date.now() - dashStartTime;
+                
+                if (elapsed < dashBackDuration) {
+                    // 0.1초 동안 뒤로 이동
+                    const backProgress = elapsed / dashBackDuration;
+                    x = dashStartX - dashDirection.x * dashBackDistance * backProgress;
+                    y = dashStartY - dashDirection.y * dashBackDistance * backProgress;
+                } else {
+                    // 앞으로 돌진 (프레임 기반)
+                    if (dashPhase === 'back') {
+                        // 뒤로 가기 완료, 앞으로 돌진 시작
+                        dashPhase = 'forward';
+                        dashForwardProgress = 0;
+                    }
+                    
+                    dashForwardProgress += dashForwardSpeed;
+                    
+                    if (dashForwardProgress < dashForwardDistance) {
+                        x = dashStartX - dashDirection.x * dashBackDistance + dashDirection.x * dashForwardProgress;
+                        y = dashStartY - dashDirection.y * dashBackDistance + dashDirection.y * dashForwardProgress;
+                    } else {
+                        // 돌진 완료
+                        x = dashStartX - dashDirection.x * dashBackDistance + dashDirection.x * dashForwardDistance;
+                        y = dashStartY - dashDirection.y * dashBackDistance + dashDirection.y * dashForwardDistance;
+                        isDashing = false;
+                        dashPhase = 'back';
+                    }
+                }
+            } else {
+                // 마우스 위치로 부드럽게 이동
+                const dx = targetX - x;
+                const dy = targetY - y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance > speed) {
+                    // 속도만큼 이동
+                    x += (dx / distance) * speed;
+                    y += (dy / distance) * speed;
+                } else {
+                    // 목표 위치에 도달
+                    x = targetX;
+                    y = targetY;
+                }
+            }
+
+            // 게임 영역 경계 체크
+            const maxX = gameArea.offsetWidth - characterSize;
+            const maxY = gameArea.offsetHeight - characterSize;
+
+            x = Math.max(0, Math.min(x, maxX));
+            y = Math.max(0, Math.min(y, maxY));
+
+            character.style.left = x + 'px';
+            character.style.top = y + 'px';
+        }
+
+        // 게임 루프
+        function gameLoop() {
+            updatePosition();
+            updateGauge();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 초기 위치 설정
+        updatePosition();
+        // 초기 게이지 상태 (쿨타임 없음)
+        gaugeBackground.style.display = 'none';
+        updateGauge();
+
+        // 게임 루프 시작
+        gameLoop();
+    </script>
+</body>
+</html>
+
