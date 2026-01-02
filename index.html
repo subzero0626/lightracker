@@ -936,11 +936,14 @@
         function handleMultiplayerData(data) {
             switch(data.type) {
                 case 'position':
-                    // 상대방 위치 업데이트
+                    // 상대방 위치 업데이트 (즉시 반영)
                     blueX = data.x;
                     blueY = data.y;
                     blueCircle.style.left = blueX + 'px';
                     blueCircle.style.top = blueY + 'px';
+                    // 속도도 리셋하여 부드러운 이동
+                    blueVelocityX = 0;
+                    blueVelocityY = 0;
                     break;
                 case 'health':
                     // 상대방 체력 업데이트
@@ -1023,6 +1026,11 @@
                         gauge2Completed = false;
                         gauge3Completed = false;
                         gauge4Completed = false;
+                        // 게이지 시작 시간 리셋 (카운트다운 후 다시 설정됨)
+                        topGauge1StartTime = 0;
+                        topGauge2StartTime = 0;
+                        topGauge3StartTime = 0;
+                        topGauge4StartTime = 0;
                         topGauge1.style.width = '0%';
                         topGauge2.style.width = '0%';
                         topGauge3.style.width = '0%';
@@ -1260,10 +1268,11 @@
         
         // 상단 게이지 관련 변수
         const topGaugeDuration = 20000; // 20초 (밀리초)
-        let topGauge1StartTime = Date.now();
-        let topGauge2StartTime = Date.now() + topGaugeDuration; // 20초 후 시작
-        let topGauge3StartTime = Date.now() + topGaugeDuration * 2; // 40초 후 시작
-        let topGauge4StartTime = Date.now() + topGaugeDuration * 3; // 60초 후 시작
+        // 게이지 시작 시간 (게임 시작 전에는 0으로 설정, 실제 시작 시간은 startCountdown 콜백에서 설정)
+        let topGauge1StartTime = 0;
+        let topGauge2StartTime = 0;
+        let topGauge3StartTime = 0;
+        let topGauge4StartTime = 0;
         let gauge1Completed = false; // 게이지 1 완료 여부
         let gauge2Completed = false; // 게이지 2 완료 여부
         let gauge3Completed = false; // 게이지 3 완료 여부
@@ -1353,17 +1362,15 @@
             }
         }
         
-        let { x, y } = initializePosition();  // 캐릭터의 시작 위치 (중앙)
-        let targetX = x; // 목표 X 위치
-        let targetY = y; // 목표 Y 위치
-        let prevX = x; // 이전 프레임의 X 위치
-        let prevY = y; // 이전 프레임의 Y 위치
+        // 플레이어 위치 변수 (초기화는 init() 또는 startMultiplayerGame()에서 수행)
+        let x, y;
+        let targetX, targetY;
+        let prevX, prevY;
         let velocityX = 0; // 플레이어의 X 속도
         let velocityY = 0; // 플레이어의 Y 속도
         
         // 파란색 원 위치 및 속도
-        let blueX = window.innerWidth / 2 - characterSize / 2 + 100; // 캐릭터 오른쪽에 배치
-        let blueY = y; // 플레이어와 같은 y축
+        let blueX, blueY;
         let blueVelocityX = 0; // 파란 원의 X 속도
         let blueVelocityY = 0; // 파란 원의 Y 속도
         
@@ -1419,6 +1426,9 @@
 
         // 마우스 좌클릭 - 돌진
         window.addEventListener('mousedown', (e) => {
+            // 구슬 선택 단계에서는 돌진 불가
+            if (waitingForSelection) return;
+            
             if (e.button === 0 && !isDashing && Date.now() >= dashCooldownEndTime && !gamePaused) { // 좌클릭 (돌진 중이 아니고 쿨타임이 끝났을 때만, 게임이 일시정지되지 않았을 때만)
                 const dx = targetX - x;
                 const dy = targetY - y;
@@ -1769,6 +1779,18 @@
             lightPlatform.style.left = platformX + 'px';
             lightPlatform.style.top = platformY + 'px';
         }
+        
+        // 게스트용: 장판 UI만 업데이트 (호스트로부터 받은 데이터 사용)
+        function updateLightPlatformUI() {
+            if (gamePaused) return;
+            
+            // 호스트로부터 받은 platformX, platformY, platformSizeMultiplier를 사용하여 UI만 업데이트
+            const platformDisplaySize = platformSize * platformSizeMultiplier;
+            lightPlatform.style.width = platformDisplaySize + 'px';
+            lightPlatform.style.height = platformDisplaySize + 'px';
+            lightPlatform.style.left = platformX + 'px';
+            lightPlatform.style.top = platformY + 'px';
+        }
 
         // 상단 게이지 업데이트 함수
         function updateTopGauges() {
@@ -1778,10 +1800,23 @@
             let gauge3Progress = 0;
             let gauge4Progress = 0;
             
+            // 게이지 시작 시간이 설정되지 않았으면 업데이트하지 않음
+            if (topGauge1StartTime === 0) {
+                topGauge1.style.width = '0%';
+                topGauge2.style.width = '0%';
+                topGauge3.style.width = '0%';
+                topGauge4.style.width = '0%';
+                return;
+            }
+            
             // 게이지 1 업데이트
             if (!gauge1Completed) {
                 let gauge1Elapsed = now - topGauge1StartTime;
-                if (gauge1Elapsed >= topGaugeDuration) {
+                if (gauge1Elapsed < 0) {
+                    // 아직 시작 시간이 되지 않음
+                    gauge1Progress = 0;
+                    topGauge1.style.width = '0%';
+                } else if (gauge1Elapsed >= topGaugeDuration) {
                     gauge1Completed = true;
                     topGauge1.style.width = '100%';
                     gauge1Progress = 100;
@@ -1797,7 +1832,11 @@
             // 게이지 2 업데이트
             if (!gauge2Completed) {
                 let gauge2Elapsed = now - topGauge2StartTime;
-                if (gauge2Elapsed >= topGaugeDuration) {
+                if (gauge2Elapsed < 0) {
+                    // 아직 시작 시간이 되지 않음
+                    gauge2Progress = 0;
+                    topGauge2.style.width = '0%';
+                } else if (gauge2Elapsed >= topGaugeDuration) {
                     gauge2Completed = true;
                     topGauge2.style.width = '100%';
                     gauge2Progress = 100;
@@ -1813,7 +1852,11 @@
             // 게이지 3 업데이트
             if (!gauge3Completed) {
                 let gauge3Elapsed = now - topGauge3StartTime;
-                if (gauge3Elapsed >= topGaugeDuration) {
+                if (gauge3Elapsed < 0) {
+                    // 아직 시작 시간이 되지 않음
+                    gauge3Progress = 0;
+                    topGauge3.style.width = '0%';
+                } else if (gauge3Elapsed >= topGaugeDuration) {
                     gauge3Completed = true;
                     topGauge3.style.width = '100%';
                     gauge3Progress = 100;
@@ -1829,7 +1872,11 @@
             // 게이지 4 업데이트
             if (!gauge4Completed) {
                 let gauge4Elapsed = now - topGauge4StartTime;
-                if (gauge4Elapsed >= topGaugeDuration) {
+                if (gauge4Elapsed < 0) {
+                    // 아직 시작 시간이 되지 않음
+                    gauge4Progress = 0;
+                    topGauge4.style.width = '0%';
+                } else if (gauge4Elapsed >= topGaugeDuration) {
                     gauge4Completed = true;
                     topGauge4.style.width = '100%';
                     gauge4Progress = 100;
@@ -1901,6 +1948,102 @@
             
             const now = Date.now();
             
+        // 게스트용: 게이지 UI만 업데이트 (호스트로부터 받은 데이터 사용)
+        function updateTopGaugesUI() {
+            if (gamePaused) return;
+            
+            // 게이지 시작 시간이 설정되지 않았으면 업데이트하지 않음
+            if (topGauge1StartTime === 0) {
+                topGauge1.style.width = '0%';
+                topGauge2.style.width = '0%';
+                topGauge3.style.width = '0%';
+                topGauge4.style.width = '0%';
+                return;
+            }
+            
+            const now = Date.now();
+            let gauge1Progress = 0;
+            let gauge2Progress = 0;
+            let gauge3Progress = 0;
+            let gauge4Progress = 0;
+            
+            // 게이지 1 업데이트
+            if (!gauge1Completed) {
+                let gauge1Elapsed = now - topGauge1StartTime;
+                if (gauge1Elapsed < 0) {
+                    gauge1Progress = 0;
+                    topGauge1.style.width = '0%';
+                } else if (gauge1Elapsed >= topGaugeDuration) {
+                    gauge1Completed = true;
+                    topGauge1.style.width = '100%';
+                    gauge1Progress = 100;
+                } else {
+                    gauge1Progress = (gauge1Elapsed / topGaugeDuration) * 100;
+                    topGauge1.style.width = gauge1Progress + '%';
+                }
+            } else {
+                topGauge1.style.width = '100%';
+                gauge1Progress = 100;
+            }
+            
+            // 게이지 2 업데이트
+            if (!gauge2Completed) {
+                let gauge2Elapsed = now - topGauge2StartTime;
+                if (gauge2Elapsed < 0) {
+                    gauge2Progress = 0;
+                    topGauge2.style.width = '0%';
+                } else if (gauge2Elapsed >= topGaugeDuration) {
+                    gauge2Completed = true;
+                    topGauge2.style.width = '100%';
+                    gauge2Progress = 100;
+                } else {
+                    gauge2Progress = (gauge2Elapsed / topGaugeDuration) * 100;
+                    topGauge2.style.width = gauge2Progress + '%';
+                }
+            } else {
+                topGauge2.style.width = '100%';
+                gauge2Progress = 100;
+            }
+            
+            // 게이지 3 업데이트
+            if (!gauge3Completed) {
+                let gauge3Elapsed = now - topGauge3StartTime;
+                if (gauge3Elapsed < 0) {
+                    gauge3Progress = 0;
+                    topGauge3.style.width = '0%';
+                } else if (gauge3Elapsed >= topGaugeDuration) {
+                    gauge3Completed = true;
+                    topGauge3.style.width = '100%';
+                    gauge3Progress = 100;
+                } else {
+                    gauge3Progress = (gauge3Elapsed / topGaugeDuration) * 100;
+                    topGauge3.style.width = gauge3Progress + '%';
+                }
+            } else {
+                topGauge3.style.width = '100%';
+                gauge3Progress = 100;
+            }
+            
+            // 게이지 4 업데이트
+            if (!gauge4Completed) {
+                let gauge4Elapsed = now - topGauge4StartTime;
+                if (gauge4Elapsed < 0) {
+                    gauge4Progress = 0;
+                    topGauge4.style.width = '0%';
+                } else if (gauge4Elapsed >= topGaugeDuration) {
+                    gauge4Completed = true;
+                    topGauge4.style.width = '100%';
+                    gauge4Progress = 100;
+                } else {
+                    gauge4Progress = (gauge4Elapsed / topGaugeDuration) * 100;
+                    topGauge4.style.width = gauge4Progress + '%';
+                }
+            } else {
+                topGauge4.style.width = '100%';
+                gauge4Progress = 100;
+            }
+        }
+        
             // 플레이어가 장판 밖에 있는지 확인
             const charCenterX = x + radius;
             const charCenterY = y + radius;
@@ -2112,6 +2255,9 @@
             // 라운드 종료 화면 표시
             roundEndScreen.style.display = 'flex';
             
+            // 구슬 선택 단계에서는 플레이어 이동을 허용하기 위해 gamePaused를 false로 설정
+            gamePaused = false;
+            
             // 진 플레이어부터 선택 시작
             selectionTurn = roundEndReason === 'player' ? 'enemy' : 'player';
             waitingForSelection = true;
@@ -2122,7 +2268,27 @@
             if (!waitingForSelection || selectedOrbs.length >= 2) return;
             
             const orbs = document.querySelectorAll('.upgradeOrb');
-            const currentPlayer = selectionTurn === 'player' ? character : blueCircle;
+            // 멀티플레이어: 자신의 플레이어를 확인
+            // selectionTurn이 'player'면 호스트(빨간색), 'enemy'면 게스트(파란색)
+            // 하지만 실제로는 현재 차례인 플레이어가 자신인지 확인해야 함
+            let isMyTurn = false;
+            if (isConnected) {
+                // 멀티플레이어 모드
+                if (selectionTurn === 'player') {
+                    // 'player'는 호스트(빨간색)를 의미
+                    isMyTurn = isHost;
+                } else {
+                    // 'enemy'는 게스트(파란색)를 의미
+                    isMyTurn = !isHost;
+                }
+            } else {
+                // 싱글플레이어 모드
+                isMyTurn = selectionTurn === 'player';
+            }
+            
+            if (!isMyTurn) return; // 자신의 차례가 아니면 리턴
+            
+            const currentPlayer = character; // 항상 자신의 플레이어 사용
             const now = Date.now();
             
             // 플레이어의 화면 좌표 계산
@@ -2307,6 +2473,12 @@
             gauge3Completed = false;
             gauge4Completed = false;
             
+            // 게이지 시작 시간 리셋 (카운트다운 후 다시 설정됨)
+            topGauge1StartTime = 0;
+            topGauge2StartTime = 0;
+            topGauge3StartTime = 0;
+            topGauge4StartTime = 0;
+            
             // 게이지 UI 리셋 (width를 0%로 설정)
             topGauge1.style.width = '0%';
             topGauge2.style.width = '0%';
@@ -2401,24 +2573,36 @@
 
         // 멀티플레이어 데이터 전송
         let lastSyncTime = 0;
-        const syncInterval = 50; // 50ms마다 동기화
+        const syncInterval = 50; // 50ms마다 동기화 (1초에 20번)
         let lastGameStateSyncTime = 0;
         const gameStateSyncInterval = 100; // 100ms마다 게임 상태 동기화 (호스트만)
+        let lastPositionSyncTime = 0;
+        const positionSyncInterval = 50; // 50ms마다 위치 동기화 (1초에 20번)
+        let lastSentX = x;
+        let lastSentY = y;
         
         function syncMultiplayerData() {
             if (!isConnected || !conn) return;
             
             const now = Date.now();
             
-            // 플레이어 위치 및 체력 전송 (모든 플레이어)
-            if (now - lastSyncTime >= syncInterval) {
-                lastSyncTime = now;
+            // 플레이어 위치 전송 (50ms마다 또는 위치가 변경되었을 때)
+            const positionChanged = Math.abs(x - lastSentX) > 0.5 || Math.abs(y - lastSentY) > 0.5;
+            if (positionChanged || now - lastPositionSyncTime >= positionSyncInterval) {
+                lastPositionSyncTime = now;
+                lastSentX = x;
+                lastSentY = y;
                 
                 conn.send({
                     type: 'position',
                     x: x,
                     y: y
                 });
+            }
+            
+            // 체력 전송 (50ms마다)
+            if (now - lastSyncTime >= syncInterval) {
+                lastSyncTime = now;
                 
                 conn.send({
                     type: 'health',
@@ -2432,10 +2616,46 @@
                 
                 // 게이지 진행도 계산
                 const gaugeNow = Date.now();
-                let gauge1Progress = gauge1Completed ? 100 : Math.min(100, ((gaugeNow - topGauge1StartTime) / topGaugeDuration) * 100);
-                let gauge2Progress = gauge2Completed ? 100 : Math.min(100, ((gaugeNow - topGauge2StartTime) / topGaugeDuration) * 100);
-                let gauge3Progress = gauge3Completed ? 100 : Math.min(100, ((gaugeNow - topGauge3StartTime) / topGaugeDuration) * 100);
-                let gauge4Progress = gauge4Completed ? 100 : Math.min(100, ((gaugeNow - topGauge4StartTime) / topGaugeDuration) * 100);
+                let gauge1Progress = 0;
+                let gauge2Progress = 0;
+                let gauge3Progress = 0;
+                let gauge4Progress = 0;
+                
+                if (topGauge1StartTime > 0) {
+                    if (gauge1Completed) {
+                        gauge1Progress = 100;
+                    } else {
+                        const elapsed = gaugeNow - topGauge1StartTime;
+                        gauge1Progress = Math.max(0, Math.min(100, (elapsed / topGaugeDuration) * 100));
+                    }
+                }
+                
+                if (topGauge2StartTime > 0) {
+                    if (gauge2Completed) {
+                        gauge2Progress = 100;
+                    } else {
+                        const elapsed = gaugeNow - topGauge2StartTime;
+                        gauge2Progress = Math.max(0, Math.min(100, (elapsed / topGaugeDuration) * 100));
+                    }
+                }
+                
+                if (topGauge3StartTime > 0) {
+                    if (gauge3Completed) {
+                        gauge3Progress = 100;
+                    } else {
+                        const elapsed = gaugeNow - topGauge3StartTime;
+                        gauge3Progress = Math.max(0, Math.min(100, (elapsed / topGaugeDuration) * 100));
+                    }
+                }
+                
+                if (topGauge4StartTime > 0) {
+                    if (gauge4Completed) {
+                        gauge4Progress = 100;
+                    } else {
+                        const elapsed = gaugeNow - topGauge4StartTime;
+                        gauge4Progress = Math.max(0, Math.min(100, (elapsed / topGaugeDuration) * 100));
+                    }
+                }
                 
                 conn.send({
                     type: 'gameState',
@@ -2468,10 +2688,15 @@
             if (!gamePaused) {
                 updateGauge();
                 
-                // 게임 상태 업데이트는 호스트만 수행 (멀티플레이어 모드)
+                // 게임 상태 업데이트
                 if (isHost || !isConnected) {
+                    // 호스트: 게임 상태를 계산하고 업데이트
                     updateLightPlatform();
                     updateTopGauges();
+                } else {
+                    // 게스트: 호스트로부터 받은 데이터로 UI만 업데이트
+                    updateLightPlatformUI();
+                    updateTopGaugesUI();
                 }
                 
                 updateHealth();
@@ -2492,26 +2717,29 @@
 
         // 초기화 함수
         function init() {
-            // 초기 위치 재설정 (멀티플레이어 모드 고려)
-            const pos = initializePosition();
-            x = pos.x;
-            y = pos.y;
+            // 위치가 설정되지 않은 경우에만 초기 위치 설정
+            if (x === undefined || y === undefined) {
+                const pos = initializePosition();
+                x = pos.x;
+                y = pos.y;
+                targetX = x;
+                targetY = y;
+                blueX = pos.blueX;
+                blueY = pos.blueY;
+            }
+            
             prevX = x;
             prevY = y;
-            targetX = x;
-            targetY = y;
             velocityX = 0;
             velocityY = 0;
+            blueVelocityX = 0;
+            blueVelocityY = 0;
             
             // 캐릭터 초기 위치 설정
             character.style.left = x + 'px';
             character.style.top = y + 'px';
             
-            // 파란색 원 초기 위치 설정 (initializePosition에서 반환된 값 사용)
-            blueX = pos.blueX;
-            blueY = pos.blueY;
-            blueVelocityX = 0;
-            blueVelocityY = 0;
+            // 파란색 원 초기 위치 설정
             blueCircle.style.left = blueX + 'px';
             blueCircle.style.top = blueY + 'px';
             
