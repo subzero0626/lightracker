@@ -172,11 +172,10 @@
             justify-content: center;
             align-items: center;
             flex-direction: column;
-            pointer-events: none;
+            pointer-events: auto;
         }
         
         #upgradeOrbsContainer {
-            pointer-events: auto;
             position: relative;
             width: 100%;
             height: 100%;
@@ -205,6 +204,28 @@
         .upgradeOrb.selected {
             opacity: 0.5;
             pointer-events: none;
+        }
+
+        .orbTooltip {
+            position: fixed;
+            left: 0;
+            top: 0;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.9);
+            color: #fff;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.4;
+            max-width: 220px;
+            z-index: 10001;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            white-space: pre-line;
+        }
+        .orbTooltip.visible {
+            opacity: 1;
         }
         
         .orbFlash {
@@ -666,6 +687,9 @@
         let isConnected = false;
         let myPeerId = null;
         let roomCode = '';
+        // ---- 상대 위치 동기화: 시퀀스 기반, 접촉 중엔 수신 무시(로컬 밀기만) ----
+        let positionSeqCounter = 0;      // 보낼 때마다 증가
+        let lastReceivedPositionSeq = 0; // 적용한 수신 패킷의 seq (이하 무시)
         let guestConnectionRetryTimer = null;
         let guestConnectionRetryCount = 0;
         const MAX_RETRY_COUNT = 100; // 최대 100회 재시도
@@ -699,6 +723,8 @@
             }
             isConnected = false;
             guestConnectionRetryCount = 0;
+            lastReceivedPositionSeq = 0;
+            positionSeqCounter = 0;
         }
         
         // 호스트: 방 생성
@@ -713,8 +739,10 @@
             roomCodeDisplay.textContent = roomCode;
             roomCodeDisplay.style.display = 'block';
             
-            // Peer 생성 (방 코드를 Peer ID로 사용)
+            // Peer 생성 (방 코드를 Peer ID로 사용) - PeerJS 무료 클라우드 사용
             peer = new Peer(roomCode, {
+                host: '0.peerjs.com',
+                secure: true,
                 debug: 2,
                 config: {
                     iceServers: [
@@ -770,8 +798,10 @@
             console.log('Joining room with code:', code);
             joinRoomStatus.textContent = 'Peer 초기화 중...';
             
-            // Peer 생성 (자동 ID)
+            // Peer 생성 (자동 ID) - PeerJS 무료 클라우드 사용
             peer = new Peer({
+                host: '0.peerjs.com',
+                secure: true,
                 debug: 2,
                 config: {
                     iceServers: [
@@ -936,14 +966,23 @@
         function handleMultiplayerData(data) {
             switch(data.type) {
                 case 'position':
-                    // 상대방 위치 업데이트 (즉시 반영)
-                    blueX = data.x;
-                    blueY = data.y;
+                    // 상대 위치·속도 저장 (그대로 밀 때 내 이동 속도로 밀리게)
+                    const remoteSeq = (data.seq != null) ? data.seq : 0;
+                    if (remoteSeq <= lastReceivedPositionSeq) break;
+                    lastReceivedPositionSeq = remoteSeq;
+                    remoteDashForward = data.dashForward === true;
+                    remoteVelocityX = Number(data.vx);
+                    remoteVelocityY = Number(data.vy);
+                    if (data.pushPowerMultiplier != null) enemyPushPowerMultiplier = Number(data.pushPowerMultiplier) || 1;
+                    if (remoteVelocityX !== remoteVelocityX) remoteVelocityX = 0;
+                    if (remoteVelocityY !== remoteVelocityY) remoteVelocityY = 0;
+                    const tx = Number(data.x);
+                    const ty = Number(data.y);
+                    if (tx !== tx || ty !== ty) break;
+                    blueX = tx;
+                    blueY = ty;
                     blueCircle.style.left = blueX + 'px';
                     blueCircle.style.top = blueY + 'px';
-                    // 속도도 리셋하여 부드러운 이동
-                    blueVelocityX = 0;
-                    blueVelocityY = 0;
                     break;
                 case 'health':
                     // 상대방 체력 업데이트
@@ -957,6 +996,13 @@
                         enemyHealth = data.health;
                     }
                     // 체력 게이지 업데이트는 updateHealth에서 처리
+                    break;
+                case 'orbPushHit':
+                    if (data.damage != null) {
+                        currentHealth -= Number(data.damage) || 0;
+                        if (currentHealth < 0) currentHealth = 0;
+                    }
+                    if (data.slow) slowUntilTime = Date.now() + 1000;
                     break;
                 case 'gameState':
                     // 호스트의 게임 상태 동기화 (게스트만 수신)
@@ -993,21 +1039,21 @@
                     }
                     break;
                 case 'roundEnd':
-                    // 라운드 종료 동기화
+                    // 라운드 종료 동기화 (게스트: 호스트가 보낸 orbConfig로 같은 강화구슬 구성 사용)
                     if (!isHost) {
                         playerWins = data.playerWins;
                         enemyWins = data.enemyWins;
-                        endRound(data.winner);
+                        endRound(data.winner, data.orbConfig);
                     }
                     break;
                 case 'roundStart':
                     // 라운드 시작 동기화
                     if (!isHost) {
+                        orbTooltip.classList.remove('visible');
                         currentRound = data.currentRound;
                         playerWins = data.playerWins;
                         enemyWins = data.enemyWins;
                         roundInfo.textContent = `Round ${currentRound}`;
-                        // 게임 상태 리셋 (startNextRound를 호출하지 않고 직접 리셋)
                         roundEndScreen.style.display = 'none';
                         isRoundEnded = false;
                         gamePaused = false;
@@ -1066,7 +1112,11 @@
                             conn.send({
                                 type: 'position',
                                 x: x,
-                                y: y
+                                y: y,
+                                seq: ++positionSeqCounter,
+                                dashForward: isDashing && dashPhase === 'forward',
+                                vx: velocityX,
+                                vy: velocityY
                             });
                         }
                         platformX = window.innerWidth / 2 - platformRadius;
@@ -1078,13 +1128,18 @@
                         platformDirectionY /= dirLength;
                         platformDirectionChangeTime = Date.now();
                         platformDirectionDuration = 5000 + Math.random() * 5000;
-                        startCountdown(() => {
+                        const onCountdownEndGuest = () => {
                             const now = Date.now();
                             topGauge1StartTime = now;
                             topGauge2StartTime = now + topGaugeDuration;
                             topGauge3StartTime = now + topGaugeDuration * 2;
                             topGauge4StartTime = now + topGaugeDuration * 3;
-                        });
+                        };
+                        if (data.countdownEndTime != null) {
+                            startCountdownSynced(data.countdownEndTime, onCountdownEndGuest);
+                        } else {
+                            startCountdown(onCountdownEndGuest);
+                        }
                     }
                     break;
                 case 'orbSelected':
@@ -1116,13 +1171,13 @@
                             value: data.value
                         });
                         
-                        // 다음 플레이어 차례로 변경
+                        // 다음 플레이어 차례로 변경 (상대가 보낸 nextTurn 사용 - 두 번째 사람 선택 가능하도록)
                         if (selectedOrbs.length === 1) {
-                            selectionTurn = roundEndReason === 'player' ? 'player' : 'enemy';
+                            selectionTurn = (data.nextTurn !== undefined) ? data.nextTurn : (roundEndReason === 'player' ? 'player' : 'enemy');
                         } else {
-                            // 두 플레이어 모두 선택 완료 - 다음 라운드 시작
+                            // 두 플레이어 모두 선택 완료 - 1초 뒤 다음 라운드 시작
                             waitingForSelection = false;
-                            startNextRound();
+                            setTimeout(() => startNextRound(), 1000);
                         }
                     }
                     break;
@@ -1166,16 +1221,38 @@
             character.style.top = y + 'px';
             blueCircle.style.left = blueX + 'px';
             blueCircle.style.top = blueY + 'px';
-            
+            positionSeqCounter = 0;
+            lastReceivedPositionSeq = 0;
+            blueVelocityX = 0;
+            blueVelocityY = 0;
+            pushVelocityX = 0;
+            pushVelocityY = 0;
             init();
             
-            startCountdown(() => {
-                const now = Date.now();
-                topGauge1StartTime = now;
-                topGauge2StartTime = now + topGaugeDuration;
-                topGauge3StartTime = now + topGaugeDuration * 2;
-                topGauge4StartTime = now + topGaugeDuration * 3;
-            });
+            // 첫 라운드 시작: 호스트와 게스트 모두 동시에 카운트다운 시작
+            // 호스트가 게스트에게 카운트다운 시작 신호를 보냄
+            if (isHost) {
+                const countdownEndTime = Date.now() + countdownTotalMs;
+                if (isConnected && conn) {
+                    conn.send({
+                        type: 'roundStart',
+                        currentRound: currentRound,
+                        playerWins: playerWins,
+                        enemyWins: enemyWins,
+                        hostX: x,
+                        hostY: y,
+                        countdownEndTime: countdownEndTime
+                    });
+                }
+                startCountdown(() => {
+                    const now = Date.now();
+                    topGauge1StartTime = now;
+                    topGauge2StartTime = now + topGaugeDuration;
+                    topGauge3StartTime = now + topGaugeDuration * 2;
+                    topGauge4StartTime = now + topGaugeDuration * 3;
+                });
+            }
+            // 게스트는 호스트의 roundStart 메시지를 받아서 카운트다운을 시작함
         }
         
         // 멀티플레이어 리셋
@@ -1281,7 +1358,8 @@
         // 체력 시스템
         const playerHealthFill = document.getElementById('playerHealthFill');
         const enemyHealthFill = document.getElementById('enemyHealthFill');
-        const maxHealth = 10;
+        const baseMaxHealth = 10;
+        let maxHealth = baseMaxHealth; // 강화구슬로 증가 가능
         let currentHealth = maxHealth;
         let enemyHealth = maxHealth; // 상대 체력
         let lastDamageTime = Date.now();
@@ -1292,6 +1370,20 @@
         const roundInfo = document.getElementById('roundInfo');
         const roundEndScreen = document.getElementById('roundEndScreen');
         const upgradeOrbsContainer = document.getElementById('upgradeOrbsContainer');
+        const orbTooltip = document.createElement('div');
+        orbTooltip.className = 'orbTooltip';
+        document.body.appendChild(orbTooltip);
+        const orbEffectDescriptions = {
+            Giant: { label: '거대화', desc: '최대체력 +3, 플레이어 크기 20% 증가' },
+            SwiftMove: { label: '신속한 이동', desc: '이동속도 +20%' },
+            Strength: { label: '근력 운동', desc: '밀치기 힘 +25%' },
+            Knuckle: { label: '너클', desc: '상대를 밀칠 때마다 0.3 데미지' },
+            EnergyDrink: { label: '에너지 드링크', desc: '이동속도 +10%, 최대체력 +1' },
+            Sticky: { label: '끈끈이', desc: '밀치기 적중 시 상대 이동속도 1초간 -15%' },
+            Ghost: { label: '유령화', desc: '상대 밀치기 20% 확률로 무시' },
+            Fortress: { label: '요새화', desc: '이동속도 -40%, 밀치기 저항 +50%' },
+            Vampire: { label: '흡혈귀', desc: '상대를 밀칠 때마다 체력 0.3 회복' }
+        };
         let currentRound = 1;
         let playerWins = 0;
         let enemyWins = 0;
@@ -1316,11 +1408,24 @@
         let gauge2BaseMultiplier = 1.0; // 게이지 2 시작 시 기준 배수
         let gauge4BaseMultiplier = 1.0; // 게이지 4 시작 시 기준 배수
 
-        const speed = 3; // 이동 속도
-        const characterSize = 50; // 캐릭터 크기
-        const radius = characterSize / 2; // 원의 반지름
+        const speed = 3; // 이동 속도 (기본)
+        const characterSize = 50; // 캐릭터 크기 (기본)
+        const radius = characterSize / 2; // 원의 반지름 (기본)
         const pushForce = 0.3; // 밀기 힘 (더 부드럽게)
         const collisionPadding = 2; // 충돌 방지 여유 공간 (증가)
+        // 강화구슬 효과 배수 (1.0 = 기본)
+        let speedMultiplier = 1.0;
+        let sizeMultiplier = 1.0; // 캐릭터 크기 (거대화 등)
+        let pushPowerMultiplier = 1.0; // 돌진 밀기 힘 (근력 운동)
+        let pushResistMultiplier = 1.0; // 밀림 저항 (1.0 = 그대로, 0.5 = 50% 덜 밀림)
+        let ghostChance = 0; // 유령화: 밀치기 무시 확률 0~1
+        let slowUntilTime = 0; // 끈끈이: 이 시간까지 이동속도 감소
+        const slowAmount = 0.85; // 끈끈이 시 속도 85%
+        let myOrbEffects = []; // 내가 고른 강화 목록 (이름만)
+        let enemyOrbEffects = []; // 상대 강화 목록 (네트워크)
+        let enemyPushPowerMultiplier = 1.0; // 상대 근력 운동 (밀칠 때 반영)
+        let lastFramePushContact = false; // 전 프레임에 내가 상대를 밀고 있었는지
+        let pushContactThisFrame = false; // 이번 프레임에 밀고 있음
         
         // 빛 장판 관련 변수
         const platformSize = 375; // 빛 장판 크기 (300 * 1.25 = 375)
@@ -1371,8 +1476,13 @@
         
         // 파란색 원 위치 및 속도
         let blueX, blueY;
-        let blueVelocityX = 0; // 파란 원의 X 속도
-        let blueVelocityY = 0; // 파란 원의 Y 속도
+        let blueVelocityX = 0; // 파란 원의 X 속도 (싱글용)
+        let blueVelocityY = 0; // 파란 원의 Y 속도 (싱글용)
+        let pushVelocityX = 0; // 멀티: 내가 밀렸을 때 받는 속도
+        let pushVelocityY = 0;
+        let remoteDashForward = false; // 상대가 돌진(forward) 중인지
+        let remoteVelocityX = 0; // 상대 이동 속도 — 그대로 밀 때 사용
+        let remoteVelocityY = 0;
         
         // 돌진 관련 변수
         let isDashing = false;
@@ -1394,8 +1504,9 @@
 
         // 마우스 위치 추적 (항상 작동하도록 window에 등록)
         window.addEventListener('mousemove', (e) => {
-            targetX = e.clientX - characterSize / 2;
-            targetY = e.clientY - characterSize / 2;
+            const half = radius * sizeMultiplier;
+            targetX = e.clientX - half;
+            targetY = e.clientY - half;
             
             // 커서 게이지 위치 업데이트
             cursorGauge.style.left = e.clientX + 'px';
@@ -1455,73 +1566,73 @@
             }
         });
 
-        // 충돌 감지 및 밀기 함수 (속도 기반)
-        function handleCollision() {
-            // 두 원의 중심 좌표 계산
-            const charCenterX = x + radius;
-            const charCenterY = y + radius;
-            const blueCenterX = blueX + radius;
-            const blueCenterY = blueY + radius;
-            
-            // 두 원의 중심 사이 거리 계산
+        // 충돌 감지 및 밀기 함수
+        // 멀티플레이: 상대 위치는 네트워크만 사용. 여기선 내 캐릭터만 분리(밀림) 처리.
+        function handleCollision(collisionX, collisionY, collisionBlueX, collisionBlueY) {
+            const myR = radius * sizeMultiplier;
+            const charCenterX = collisionX + myR;
+            const charCenterY = collisionY + myR;
+            const blueCenterX = collisionBlueX + radius;
+            const blueCenterY = collisionBlueY + radius;
             const dx = charCenterX - blueCenterX;
             const dy = charCenterY - blueCenterY;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            const minDistance = radius * 2 + collisionPadding; // 최소 거리 (여유 공간 포함)
+            const minDistance = myR + radius + collisionPadding;
             
-            // 충돌 감지 (거리가 최소 거리보다 작으면)
-            if (distance < minDistance && distance > 0.01) {
-                // 충돌 방향 벡터 정규화
-                const normalX = dx / distance;
-                const normalY = dy / distance;
-                
-                // 겹침 깊이 계산
-                const overlap = minDistance - distance;
-                
-                // 돌진 중인지 확인
-                if (isDashing && dashPhase === 'forward') {
-                    // 돌진 중: 무조건 돌진 방향으로 상대를 밀어냄
-                    // 밀리는 거리를 돌진 거리의 1.75배로 설정
-                    // 마찰을 고려하여 초기 속도 계산
-                    // 총 거리 = 초기속도 * f / (1 - f) (f = 마찰 계수)
-                    // 초기속도 = 목표거리 * (1 - f) / f
-                    const targetDistance = dashForwardDistance * pushDistanceMultiplier; // 100 * 1.75 = 175
-                    const avgFriction = 0.94; // 평균 마찰 계수 (마찰 약간 증가)
-                    const dashPushSpeed = targetDistance * (1 - avgFriction) / avgFriction;
-                    
-                    // 현재 속도 벡터와 돌진 방향 벡터의 내적 계산
-                    const currentSpeedInDirection = blueVelocityX * dashDirection.x + blueVelocityY * dashDirection.y;
-                    
-                    // 현재 속도보다 새 속도가 크면 업데이트 (돌진 방향으로 밀기)
-                    if (dashPushSpeed > currentSpeedInDirection) {
-                        blueVelocityX = dashDirection.x * dashPushSpeed;
-                        blueVelocityY = dashDirection.y * dashPushSpeed;
-                    }
-                } else {
-                    // 일반 이동 중: 플레이어의 속도 계산
-                    const playerSpeed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
-                    
-                    // 플레이어의 속도를 충돌 방향으로 투영
-                    const relativeVelocity = velocityX * normalX + velocityY * normalY;
-                    
-                    // 플레이어가 파란 원을 밀고 있는 경우 (상대 속도가 양수)
-                    if (relativeVelocity > 0 && playerSpeed > 0.1) {
-                        // 충돌 방향으로 파란 원을 밀어냄
-                        blueVelocityX = normalX * playerSpeed;
-                        blueVelocityY = normalY * playerSpeed;
-                    }
-                }
-                
-                // 겹침 해결 (즉시 분리) - 돌진 중에는 더 강하게 분리
-                const separationRatio = (isDashing && dashPhase === 'forward') ? 1.0 : 0.6;
+            if (distance >= minDistance || distance < 0.01) return;
+            
+            const normalX = dx / distance;
+            const normalY = dy / distance;
+            const overlap = minDistance - distance;
+            
+            // 멀티: 겹침 해제는 항상. 밀림 속도는 '내가 밀리는 경우'만 (닿는 쪽은 튕기지 않게)
+            if (isConnected) {
+                const relativeVelocity = velocityX * normalX + velocityY * normalY;
+                const amIPusher = relativeVelocity < -0.3;
+                if (amIPusher) pushContactThisFrame = true; // 내가 상대를 밀고 있음 (너클/끈끈이/흡혈귀 트리거용)
+                const separationRatio = 0.6;
                 const separationX = normalX * overlap * separationRatio;
                 const separationY = normalY * overlap * separationRatio;
-                
-                // 플레이어는 적게 밀리고, 파란 원은 많이 밀려나도록
-                // 돌진 중에는 플레이어를 거의 밀지 않음
-                const playerPushRatio = (isDashing && dashPhase === 'forward') ? 0.1 : 0.3;
+                x += separationX * 0.5;
+                y += separationY * 0.5;
+                // 밀릴 때: 돌진으로 닿을 때만 밀림. 유령화 시 20% 확률로 무시
+                if (!amIPusher && remoteDashForward && Math.random() >= ghostChance) {
+                    const pushStrength = (22 / 5) * 1.3 * 1.2 * enemyPushPowerMultiplier; // 상대 근력 운동 반영
+                    pushVelocityX += normalX * pushStrength * pushResistMultiplier;   // 요새화(밀림 저항) 반영
+                    pushVelocityY += normalY * pushStrength * pushResistMultiplier;
+                }
+                return;
+            }
+            
+            // 싱글플레이: 기존처럼 파란 원(blue)도 밀기
+            if (isDashing && dashPhase === 'forward') {
+                const targetDistance = dashForwardDistance * pushDistanceMultiplier;
+                const avgFriction = 0.94;
+                const dashPushSpeed = targetDistance * (1 - avgFriction) / avgFriction;
+                const currentSpeedInDirection = blueVelocityX * dashDirection.x + blueVelocityY * dashDirection.y;
+                if (dashPushSpeed > currentSpeedInDirection) {
+                    blueVelocityX = dashDirection.x * dashPushSpeed;
+                    blueVelocityY = dashDirection.y * dashPushSpeed;
+                }
+                const minSeparation = overlap * 0.3;
+                const separationX = normalX * minSeparation;
+                const separationY = normalY * minSeparation;
+                x += separationX * 0.1;
+                y += separationY * 0.1;
+                blueX -= separationX * 0.9;
+                blueY -= separationY * 0.9;
+            } else {
+                const playerSpeed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
+                const relativeVelocity = velocityX * normalX + velocityY * normalY;
+                if (relativeVelocity > 0 && playerSpeed > 0.1) {
+                    blueVelocityX = normalX * playerSpeed;
+                    blueVelocityY = normalY * playerSpeed;
+                }
+                const separationRatio = 0.6;
+                const separationX = normalX * overlap * separationRatio;
+                const separationY = normalY * overlap * separationRatio;
+                const playerPushRatio = 0.3;
                 const bluePushRatio = 1.0 - playerPushRatio;
-                
                 x += separationX * playerPushRatio;
                 y += separationY * playerPushRatio;
                 blueX -= separationX * bluePushRatio;
@@ -1529,28 +1640,30 @@
             }
         }
 
-        // 충돌 예측 함수 (이동 전 충돌 방지)
+        // 충돌 예측 함수 (이동 전 충돌 방지, 거대화 반영)
         function checkCollisionBeforeMove(newX, newY) {
-            const charCenterX = newX + radius;
-            const charCenterY = newY + radius;
+            const myR = radius * sizeMultiplier;
+            const charCenterX = newX + myR;
+            const charCenterY = newY + myR;
             const blueCenterX = blueX + radius;
             const blueCenterY = blueY + radius;
             
             const dx = charCenterX - blueCenterX;
             const dy = charCenterY - blueCenterY;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            const minDistance = radius * 2 + collisionPadding;
+            const minDistance = myR + radius + collisionPadding;
             
             return distance < minDistance;
         }
 
         // 캐릭터 위치 업데이트 함수
         function updatePosition() {
-            // 카운트다운 중에는 플레이어 이동 불가
+            pushContactThisFrame = false;
             if (countdown.classList.contains('active')) {
                 return;
             }
             
+            const effectiveSpeed = speed * speedMultiplier * (Date.now() < slowUntilTime ? slowAmount : 1);
             let newX = x;
             let newY = y;
             
@@ -1589,10 +1702,9 @@
                 const dy = targetY - y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
-                if (distance > speed) {
-                    // 속도만큼 이동
-                    newX = x + (dx / distance) * speed;
-                    newY = y + (dy / distance) * speed;
+                if (distance > effectiveSpeed) {
+                    newX = x + (dx / distance) * effectiveSpeed;
+                    newY = y + (dy / distance) * effectiveSpeed;
                 } else {
                     // 목표 위치에 도달
                     newX = targetX;
@@ -1607,63 +1719,80 @@
             x = newX;
             y = newY;
 
-            // 충돌 처리 (밀기 효과) - 돌진 중에는 여러 번 반복하여 겹침 방지
+            // 충돌 처리 (멀티: 내 캐릭터만 분리+밀림속도, 싱글: 파란 원도 밀기)
             const collisionIterations = (isDashing && dashPhase === 'forward') ? 10 : 3;
             for (let i = 0; i < collisionIterations; i++) {
-                handleCollision();
+                handleCollision(x, y, blueX, blueY);
             }
             
-            // 파란 원을 속도에 따라 이동
-            blueX += blueVelocityX;
-            blueY += blueVelocityY;
+            // 멀티: 밀렸을 때 받은 속도 적용 (내가 상대에게 밀린 경우)
+            if (isConnected) {
+                x += pushVelocityX;
+                y += pushVelocityY;
+                const pushFriction = 0.94;
+                pushVelocityX *= pushFriction;
+                pushVelocityY *= pushFriction;
+                if (Math.sqrt(pushVelocityX * pushVelocityX + pushVelocityY * pushVelocityY) < 0.1) {
+                    pushVelocityX = 0;
+                    pushVelocityY = 0;
+                }
+            }
             
-            // 파란 원의 속도 감소 (마찰 적용) - 자연스러운 점진적 감속
-            const baseFriction = 0.94; // 기본 마찰 계수 (0.94 = 매 프레임 6% 감소, 마찰 약간 증가)
-            const blueSpeed = Math.sqrt(blueVelocityX * blueVelocityX + blueVelocityY * blueVelocityY);
-            
-            // 속도가 빠를수록 더 빠르게 감속 (더 자연스러운 감속)
-            // 돌진 충돌 시 목표 속도 계산 (거리 기반)
-            const targetPushDistance = dashForwardDistance * pushDistanceMultiplier;
-            const avgFriction = 0.94; // 평균 마찰 계수 약간 증가 (0.93 -> 0.94)
-            const targetPushSpeed = targetPushDistance * (1 - avgFriction) / avgFriction;
-            const speedFactor = Math.min(1.0, blueSpeed / targetPushSpeed);
-            const friction = baseFriction - (speedFactor * 0.03); // 빠른 속도일 때 더 빠르게 감속
-            
-            blueVelocityX *= friction;
-            blueVelocityY *= friction;
-            
-            // 속도가 매우 작으면 정지
-            const finalBlueSpeed = Math.sqrt(blueVelocityX * blueVelocityX + blueVelocityY * blueVelocityY);
-            if (finalBlueSpeed < 0.1) {
-                blueVelocityX = 0;
-                blueVelocityY = 0;
+            // 멀티가 아니면 파란 원 물리 (속도·마찰·경계). 멀티면 상대 위치는 수신만 사용
+            if (!isConnected) {
+                blueX += blueVelocityX;
+                blueY += blueVelocityY;
+                const baseFriction = 0.94;
+                const blueSpeed = Math.sqrt(blueVelocityX * blueVelocityX + blueVelocityY * blueVelocityY);
+                const targetPushDistance = dashForwardDistance * pushDistanceMultiplier;
+                const avgFriction = 0.94;
+                const targetPushSpeed = targetPushDistance * (1 - avgFriction) / avgFriction;
+                const speedFactor = Math.min(1.0, blueSpeed / targetPushSpeed);
+                const friction = baseFriction - (speedFactor * 0.03);
+                blueVelocityX *= friction;
+                blueVelocityY *= friction;
+                const finalBlueSpeed = Math.sqrt(blueVelocityX * blueVelocityX + blueVelocityY * blueVelocityY);
+                if (finalBlueSpeed < 0.1) {
+                    blueVelocityX = 0;
+                    blueVelocityY = 0;
+                }
             }
 
-            // 게임 영역 경계 체크
-            const maxX = Math.max(0, window.innerWidth - characterSize);
-            const maxY = Math.max(0, window.innerHeight - characterSize);
-
+            const effectiveSize = characterSize * sizeMultiplier;
+            const maxX = Math.max(0, window.innerWidth - effectiveSize);
+            const maxY = Math.max(0, window.innerHeight - effectiveSize);
             x = Math.max(0, Math.min(x, maxX));
             y = Math.max(0, Math.min(y, maxY));
             
-            // 파란색 원 경계 체크 (벽에 부딪히면 속도 반전)
-            if (blueX <= 0 || blueX >= maxX) {
-                blueVelocityX *= -0.8; // 약간의 반발력
-                blueX = Math.max(0, Math.min(blueX, maxX));
+            if (!isConnected) {
+                if (blueX <= 0 || blueX >= maxX) {
+                    blueVelocityX *= -0.8;
+                    blueX = Math.max(0, Math.min(blueX, maxX));
+                }
+                if (blueY <= 0 || blueY >= maxY) {
+                    blueVelocityY *= -0.8;
+                    blueY = Math.max(0, Math.min(blueY, maxY));
+                }
             }
-            if (blueY <= 0 || blueY >= maxY) {
-                blueVelocityY *= -0.8; // 약간의 반발력
-                blueY = Math.max(0, Math.min(blueY, maxY));
+
+            if (isConnected && pushContactThisFrame && !lastFramePushContact && conn) {
+                const hasKnuckle = myOrbEffects.includes('Knuckle');
+                const hasSticky = myOrbEffects.includes('Sticky');
+                if (hasKnuckle || hasSticky) {
+                    conn.send({ type: 'orbPushHit', damage: hasKnuckle ? 0.3 : undefined, slow: hasSticky });
+                }
+                if (myOrbEffects.includes('Vampire')) currentHealth = Math.min(maxHealth, currentHealth + 0.3);
             }
+            lastFramePushContact = pushContactThisFrame;
 
             character.style.left = x + 'px';
             character.style.top = y + 'px';
             blueCircle.style.left = blueX + 'px';
             blueCircle.style.top = blueY + 'px';
             
-            // 플레이어가 장판 안에 있는지 확인 (동적 장판 크기 반영)
-            const charCenterX = x + radius;
-            const charCenterY = y + radius;
+            const myRHealth = radius * sizeMultiplier;
+            const charCenterX = x + myRHealth;
+            const charCenterY = y + myRHealth;
             const currentPlatformRadius = platformRadius * platformSizeMultiplier;
             const platformCenterX = platformX + currentPlatformRadius;
             const platformCenterY = platformY + currentPlatformRadius;
@@ -1942,12 +2071,6 @@
             }
         }
         
-        // 체력 시스템 업데이트 함수
-        function updateHealth() {
-            if (gamePaused) return; // 라운드 종료 시 데미지 중단
-            
-            const now = Date.now();
-            
         // 게스트용: 게이지 UI만 업데이트 (호스트로부터 받은 데이터 사용)
         function updateTopGaugesUI() {
             if (gamePaused) return;
@@ -2044,9 +2167,16 @@
             }
         }
         
+        // 체력 시스템 업데이트 함수
+        function updateHealth() {
+            if (gamePaused) return; // 라운드 종료 시 데미지 중단
+            
+            const now = Date.now();
+            
             // 플레이어가 장판 밖에 있는지 확인
-            const charCenterX = x + radius;
-            const charCenterY = y + radius;
+            const myRHealth = radius * sizeMultiplier;
+            const charCenterX = x + myRHealth;
+            const charCenterY = y + myRHealth;
             const platformCenterX = platformX + (platformRadius * platformSizeMultiplier);
             const platformCenterY = platformY + (platformRadius * platformSizeMultiplier);
             
@@ -2133,8 +2263,8 @@
             }
         }
         
-        // 라운드 종료 함수
-        function endRound(winner) {
+        // 라운드 종료 함수 (orbConfigFromNetwork: 게스트가 roundEnd 수신 시 사용, 호스트는 생성 후 전달)
+        function endRound(winner, orbConfigFromNetwork) {
             if (isRoundEnded) return;
             
             isRoundEnded = true;
@@ -2148,14 +2278,19 @@
                 enemyWins++;
             }
             
-            // 멀티플레이어: 호스트가 라운드 종료를 게스트에게 알림
-            if (isConnected && conn && isHost) {
-                conn.send({
-                    type: 'roundEnd',
-                    winner: winner,
-                    playerWins: playerWins,
-                    enemyWins: enemyWins
-                });
+            // 강화구슬 구성: 호스트는 생성 후 전송, 게스트는 수신한 orbConfig 사용
+            let orbConfigForShow = orbConfigFromNetwork;
+            if (isConnected && isHost) {
+                orbConfigForShow = getRandomOrbConfig();
+                if (conn) {
+                    conn.send({
+                        type: 'roundEnd',
+                        winner: winner,
+                        playerWins: playerWins,
+                        enemyWins: enemyWins,
+                        orbConfig: orbConfigForShow
+                    });
+                }
             }
             
             // 장판 숨기기
@@ -2184,12 +2319,71 @@
             blueVelocityX = 0;
             blueVelocityY = 0;
             
-            // 강화구슬 생성 및 표시
-            showUpgradeOrbs();
+            // 강화구슬 생성 및 표시 (호스트: 생성한 구성, 게스트: 수신한 orbConfig)
+            showUpgradeOrbs(orbConfigForShow);
         }
         
-        // 강화구슬 표시 함수
-        function showUpgradeOrbs() {
+        // 랜덤 강화구슬 구성 생성 (호스트가 생성 후 게스트와 동기화)
+        // value는 숫자 또는 객체(JSON 직렬화)
+        function getRandomOrbConfig() {
+            const orbEffects = [
+                { name: 'Giant', value: { maxHealth: 3, size: 1.2 } },           // 거대화
+                { name: 'SwiftMove', value: 1.2 },                               // 신속한 이동
+                { name: 'Strength', value: 1.25 },                              // 근력 운동
+                { name: 'Knuckle', value: 0.3 },                                // 너클
+                { name: 'EnergyDrink', value: { speed: 1.1, maxHealth: 1 } },   // 에너지 드링크
+                { name: 'Sticky', value: { slow: 0.85, duration: 1000 } },       // 끈끈이
+                { name: 'Ghost', value: 0.2 },                                  // 유령화
+                { name: 'Fortress', value: { speed: 0.6, pushResist: 0.5 } },     // 요새화
+                { name: 'Vampire', value: 0.3 }                                 // 흡혈귀
+            ];
+            const selected = [];
+            const available = [...orbEffects];
+            for (let i = 0; i < 3; i++) {
+                const idx = Math.floor(Math.random() * available.length);
+                selected.push(available[idx]);
+                available.splice(idx, 1);
+            }
+            return selected;
+        }
+        
+        // 강화구슬 효과 적용 (내가 선택했을 때)
+        function applyOrbEffectToMe(effectName, value) {
+            if (typeof value === 'string') {
+                try { value = value.startsWith('{') ? JSON.parse(value) : parseFloat(value); } catch (e) { value = parseFloat(value) || 0; }
+            }
+            const v = value;
+            if (effectName === 'Giant' && typeof v === 'object') {
+                maxHealth += (v.maxHealth || 0);
+                sizeMultiplier *= (v.size || 1);
+            } else if (effectName === 'SwiftMove') {
+                speedMultiplier *= (typeof v === 'number' ? v : 1.2);
+            } else if (effectName === 'Strength') {
+                pushPowerMultiplier *= (typeof v === 'number' ? v : 1.25);
+            } else if (effectName === 'Knuckle' || effectName === 'Vampire') {
+                // 수동 적용 (밀칠 때)
+            } else if (effectName === 'EnergyDrink' && typeof v === 'object') {
+                speedMultiplier *= (v.speed || 1.1);
+                maxHealth += (v.maxHealth || 1);
+            } else if (effectName === 'Sticky') {
+                // 상대에게 적용 (네트워크)
+            } else if (effectName === 'Ghost') {
+                ghostChance = Math.min(1, ghostChance + (typeof v === 'number' ? v : 0.2));
+            } else if (effectName === 'Fortress' && typeof v === 'object') {
+                speedMultiplier *= (v.speed || 0.6);
+                pushResistMultiplier *= (1 - (v.pushResist || 0.5)); // 50% 저항 = 0.5 곱
+            } else if (effectName === 'Vampire') {
+                // 수동 적용 (밀칠 때)
+            }
+            myOrbEffects.push(effectName);
+            // 캐릭터 크기 반영
+            const size = characterSize * sizeMultiplier;
+            character.style.width = size + 'px';
+            character.style.height = size + 'px';
+        }
+        
+        // 강화구슬 표시 함수 (orbConfig: 호스트가 생성한 구성 또는 게스트가 수신한 구성)
+        function showUpgradeOrbs(orbConfig) {
             // 기존 구슬 제거
             upgradeOrbsContainer.innerHTML = '';
             selectedOrbs = [];
@@ -2197,30 +2391,15 @@
             // 접촉 시간 맵 초기화
             orbContactTimes.clear();
             
-            // 강화구슬 3개 생성 (랜덤 효과)
-            const orbEffects = [
-                { name: 'Speed Boost', value: 1.2 },
-                { name: 'Health Boost', value: 2 },
-                { name: 'Dash Cooldown', value: 0.8 },
-                { name: 'Damage Reduction', value: 0.8 },
-                { name: 'Platform Size', value: 1.1 }
-            ];
-            
-            // 랜덤으로 3개 선택
-            const selectedEffects = [];
-            const availableEffects = [...orbEffects];
-            for (let i = 0; i < 3; i++) {
-                const randomIndex = Math.floor(Math.random() * availableEffects.length);
-                selectedEffects.push(availableEffects[randomIndex]);
-                availableEffects.splice(randomIndex, 1);
-            }
+            // 구성이 없으면 싱글/호스트용 랜덤 생성
+            const selectedEffects = orbConfig && orbConfig.length === 3 ? orbConfig : getRandomOrbConfig();
             
             // 구슬 배치 (삼각형으로 화면 중앙에 배치)
             selectedEffects.forEach((effect, index) => {
                 const orb = document.createElement('div');
                 orb.className = 'upgradeOrb';
                 orb.dataset.effect = effect.name;
-                orb.dataset.value = effect.value;
+                orb.dataset.value = typeof effect.value === 'object' ? JSON.stringify(effect.value) : String(effect.value);
                 
                 // 화면 중앙에 삼각형으로 배치
                 const centerX = window.innerWidth / 2;
@@ -2249,6 +2428,35 @@
                 // 초기 크기 설정
                 orb.style.transform = 'scale(1.0)';
                 
+                // 마우스 오버 시 설명 툴팁
+                const info = orbEffectDescriptions[effect.name];
+                orb.addEventListener('mouseenter', (e) => {
+                    if (info) {
+                        orbTooltip.textContent = info.label + '\n' + info.desc;
+                        orbTooltip.classList.add('visible');
+                        const updateTooltipPos = () => {
+                            orbTooltip.style.left = (e.clientX + 14) + 'px';
+                            orbTooltip.style.top = (e.clientY + 14) + 'px';
+                        };
+                        updateTooltipPos();
+                        orb.addEventListener('mousemove', updateTooltipPos);
+                        orb._tooltipMove = updateTooltipPos;
+                    }
+                });
+                orb.addEventListener('mouseleave', () => {
+                    orbTooltip.classList.remove('visible');
+                    if (orb._tooltipMove) {
+                        orb.removeEventListener('mousemove', orb._tooltipMove);
+                        orb._tooltipMove = null;
+                    }
+                });
+                
+                // 클릭으로 선택
+                orb.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    doSelectOrb(orb);
+                });
+                
                 upgradeOrbsContainer.appendChild(orb);
             });
             
@@ -2258,35 +2466,80 @@
             // 구슬 선택 단계에서는 플레이어 이동을 허용하기 위해 gamePaused를 false로 설정
             gamePaused = false;
             
-            // 진 플레이어부터 선택 시작
-            selectionTurn = roundEndReason === 'player' ? 'enemy' : 'player';
+            // 진 사람(패자) 먼저 선택 → 그 사람이 선택하면 이긴 사람(승자)이 남은 2개 중 선택
+            const loser = roundEndReason === 'player' ? 'enemy' : 'player'; // 'player' 승리 시 패자='enemy'(게스트)
+            selectionTurn = loser; // 1순위: 패자
             waitingForSelection = true;
         }
         
-        // 구슬 선택 확인 함수
+        // 구슬 하나 선택 처리 (클릭 또는 접촉 완료 시 공통)
+        function doSelectOrb(orb) {
+            if (!orb || !orb.isConnected || !waitingForSelection || selectedOrbs.length >= 2) return;
+            let isMyTurn = false;
+            if (isConnected) {
+                // selectionTurn: 'player' = 빨간(호스트) 차례, 'enemy' = 파란(게스트) 차례 → 이긴 사람도 선택 가능
+                isMyTurn = (selectionTurn === 'player' && isHost) || (selectionTurn === 'enemy' && !isHost);
+            } else {
+                isMyTurn = true; // 싱글플레이: 항상 내 차례
+            }
+            if (!isMyTurn) return;
+            if (orb.classList && orb.classList.contains('orb-selecting')) return;
+            orb.classList.add('orb-selecting');
+            
+            const orbRect = orb.getBoundingClientRect();
+            const orbCenterX = orbRect.left + orbRect.width / 2;
+            const orbCenterY = orbRect.top + orbRect.height / 2;
+            const orbColor = 'rgba(200, 150, 255, 0.6)';
+            const flash = document.createElement('div');
+            flash.className = 'orbFlash';
+            flash.style.background = `radial-gradient(circle, ${orbColor}, transparent)`;
+            flash.style.boxShadow = `0 0 70px ${orbColor}, 0 0 100px ${orbColor}`;
+            flash.style.left = orbCenterX + 'px';
+            flash.style.top = orbCenterY + 'px';
+            upgradeOrbsContainer.appendChild(flash);
+            setTimeout(() => flash.remove(), 500);
+            
+            selectedOrbs.push({ player: selectionTurn, effect: orb.dataset.effect, value: orb.dataset.value });
+            applyOrbEffectToMe(orb.dataset.effect, orb.dataset.value);
+            orbContactTimes.delete(orb);
+            
+            const allOrbs = Array.from(document.querySelectorAll('.upgradeOrb'));
+            const orbIndex = allOrbs.indexOf(orb);
+            const nextTurn = roundEndReason;
+            if (isConnected && conn) {
+                conn.send({
+                    type: 'orbSelected',
+                    orbIndex: orbIndex,
+                    player: selectionTurn,
+                    effect: orb.dataset.effect,
+                    value: orb.dataset.value,
+                    nextTurn: nextTurn
+                });
+            }
+            orb.remove();
+            if (selectedOrbs.length === 1) {
+                selectionTurn = nextTurn;
+            } else {
+                waitingForSelection = false;
+                setTimeout(() => startNextRound(), 1000);
+            }
+        }
+        
+        // 구슬 선택 확인 함수 (캐릭터 접촉 2초 시에도 선택)
         function checkOrbSelection() {
             if (!waitingForSelection || selectedOrbs.length >= 2) return;
             
             const orbs = document.querySelectorAll('.upgradeOrb');
-            // 멀티플레이어: 자신의 플레이어를 확인
-            // selectionTurn이 'player'면 호스트(빨간색), 'enemy'면 게스트(파란색)
-            // 하지만 실제로는 현재 차례인 플레이어가 자신인지 확인해야 함
+            // 패자 먼저(selectedOrbs.length===0), 그 다음 승자만(selectedOrbs.length===1) 선택 가능
             let isMyTurn = false;
             if (isConnected) {
-                // 멀티플레이어 모드
-                if (selectionTurn === 'player') {
-                    // 'player'는 호스트(빨간색)를 의미
-                    isMyTurn = isHost;
-                } else {
-                    // 'enemy'는 게스트(파란색)를 의미
-                    isMyTurn = !isHost;
-                }
+                // selectionTurn: 'player' = 빨간(호스트) 차례, 'enemy' = 파란(게스트) 차례
+                isMyTurn = (selectionTurn === 'player' && isHost) || (selectionTurn === 'enemy' && !isHost);
             } else {
-                // 싱글플레이어 모드
-                isMyTurn = selectionTurn === 'player';
+                isMyTurn = true; // 싱글플레이: 항상 내 차례
             }
             
-            if (!isMyTurn) return; // 자신의 차례가 아니면 리턴
+            if (!isMyTurn) return;
             
             const currentPlayer = character; // 항상 자신의 플레이어 사용
             const now = Date.now();
@@ -2329,63 +2582,7 @@
                     
                     // 2초 이상 닿아있으면 선택
                     if (contactDuration >= orbSelectionDuration) {
-                        // 빛나는 효과 생성
-                        const flash = document.createElement('div');
-                        flash.className = 'orbFlash';
-                        
-                        // 구슬의 색깔 가져오기 (배경 그라데이션에서 색상 추출)
-                        const computedStyle = window.getComputedStyle(orb);
-                        const bgColor = computedStyle.backgroundImage;
-                        // 그라데이션에서 색상 추출 (간단한 방법: 보라색 계열 사용)
-                        const orbColor = 'rgba(200, 150, 255, 0.6)'; // 구슬의 주요 색상
-                        flash.style.background = `radial-gradient(circle, ${orbColor}, transparent)`;
-                        flash.style.boxShadow = `0 0 70px ${orbColor}, 0 0 100px ${orbColor}`;
-                        
-                        // 구슬 위치에 빛나는 효과 배치
-                        flash.style.left = orbCenterX + 'px';
-                        flash.style.top = orbCenterY + 'px';
-                        upgradeOrbsContainer.appendChild(flash);
-                        
-                        // 애니메이션 종료 후 제거
-                        setTimeout(() => {
-                            flash.remove();
-                        }, 500);
-                        
-                        selectedOrbs.push({
-                            player: selectionTurn,
-                            effect: orb.dataset.effect,
-                            value: parseFloat(orb.dataset.value)
-                        });
-                        
-                        // 접촉 시간 기록 제거
-                        orbContactTimes.delete(orb);
-                        
-                        // 선택된 구슬의 인덱스 찾기 (동기화용)
-                        const allOrbs = Array.from(document.querySelectorAll('.upgradeOrb'));
-                        const orbIndex = allOrbs.indexOf(orb);
-                        
-                        // 멀티플레이어: 구슬 선택 동기화
-                        if (isConnected && conn) {
-                            conn.send({
-                                type: 'orbSelected',
-                                orbIndex: orbIndex,
-                                player: selectionTurn,
-                                effect: orb.dataset.effect,
-                                value: parseFloat(orb.dataset.value)
-                            });
-                        }
-                        
-                        // 선택된 구슬 제거
-                        orb.remove();
-                        
-                        // 다음 플레이어 차례로 변경
-                        if (selectedOrbs.length === 1) {
-                            selectionTurn = roundEndReason === 'player' ? 'player' : 'enemy';
-                        } else {
-                            // 두 플레이어 모두 선택 완료 - 다음 라운드 시작
-                            waitingForSelection = false;
-                            startNextRound();
-                        }
+                        doSelectOrb(orb);
                     }
                 } else {
                     // 구슬에서 멀어지면 접촉 시간 리셋 및 크기 복원
@@ -2398,57 +2595,88 @@
             });
         }
         
-        // 카운트다운 함수
+        const countdownTotalMs = 3500; // 3초 + GO 0.5초
+        
+        // 카운트다운 함수 (로컬 3초)
         function startCountdown(callback) {
-            gamePaused = true; // 카운트다운 중 게임 일시정지
+            gamePaused = true;
             countdown.classList.add('active');
-            
             let count = 3;
             countdownNumber.textContent = count;
             countdownText.textContent = '라운드 시작';
-            
             const countdownInterval = setInterval(() => {
                 count--;
                 if (count > 0) {
                     countdownNumber.textContent = count;
-                    // 애니메이션 재시작을 위해 클래스 제거 후 추가
                     countdownNumber.style.animation = 'none';
-                    setTimeout(() => {
-                        countdownNumber.style.animation = '';
-                    }, 10);
+                    setTimeout(() => { countdownNumber.style.animation = ''; }, 10);
                 } else {
                     countdownNumber.textContent = 'GO!';
                     countdownText.textContent = '';
                     clearInterval(countdownInterval);
-                    
                     setTimeout(() => {
                         countdown.classList.remove('active');
-                        // 카운트다운 종료 시 현재 위치를 목표 위치로 설정하여 순간이동 방지
                         targetX = x;
                         targetY = y;
-                        gamePaused = false; // 카운트다운 종료 후 게임 재개
+                        gamePaused = false;
                         if (callback) callback();
                     }, 500);
                 }
             }, 1000);
         }
         
+        // 카운트다운 동기화: countdownEndTime(ms) 시각에 끝나도록 표시
+        function startCountdownSynced(countdownEndTime, callback) {
+            const startRemaining = countdownEndTime - Date.now();
+            if (startRemaining <= 0) {
+                if (callback) callback();
+                return;
+            }
+            gamePaused = true;
+            countdown.classList.add('active');
+            countdownNumber.textContent = '3';
+            countdownText.textContent = '라운드 시작';
+            let interval = null;
+            const tick = () => {
+                const remaining = countdownEndTime - Date.now();
+                if (remaining <= 0) {
+                    if (interval) clearInterval(interval);
+                    countdownNumber.textContent = 'GO!';
+                    countdownText.textContent = '';
+                    countdown.classList.remove('active');
+                    targetX = x;
+                    targetY = y;
+                    gamePaused = false;
+                    if (callback) callback();
+                    return;
+                }
+                if (remaining > 2500) countdownNumber.textContent = '3';
+                else if (remaining > 1500) {
+                    countdownNumber.textContent = '2';
+                    countdownNumber.style.animation = 'none';
+                    setTimeout(() => { countdownNumber.style.animation = ''; }, 10);
+                } else if (remaining > 500) countdownNumber.textContent = '1';
+                else countdownNumber.textContent = 'GO!';
+            };
+            tick();
+            interval = setInterval(tick, 100);
+        }
+        
         // 다음 라운드 시작 함수
         function startNextRound() {
-            // 승리 조건 확인
+            // 승리 조건 확인 (메시지 없이 리셋)
             if (playerWins >= 3) {
-                alert('플레이어 승리!');
                 resetGame();
                 return;
             }
             if (enemyWins >= 3) {
-                alert('상대 승리!');
                 resetGame();
                 return;
             }
             
-            // 라운드 종료 화면 숨기기
+            // 라운드 종료 화면 숨기기 + 구슬 설명 툴팁 숨기기
             roundEndScreen.style.display = 'none';
+            orbTooltip.classList.remove('visible');
             
             // 다음 라운드로
             currentRound++;
@@ -2516,7 +2744,12 @@
                 conn.send({
                     type: 'position',
                     x: x,
-                    y: y
+                    y: y,
+                    seq: ++positionSeqCounter,
+                    dashForward: isDashing && dashPhase === 'forward',
+                    vx: velocityX,
+                    vy: velocityY,
+                    pushPowerMultiplier: pushPowerMultiplier
                 });
             }
             
@@ -2539,27 +2772,31 @@
             platformDirectionChangeTime = Date.now();
             platformDirectionDuration = 5000 + Math.random() * 5000;
             
-            // 카운트다운 시작
-            startCountdown(() => {
-                // 카운트다운 완료 후 게이지 시작 시간 설정 (카운트다운이 끝난 시점부터 시작)
+            // 카운트다운: 호스트는 시작 시 roundStart+countdownEndTime 전송 후 카운트다운, 게스트는 roundStart 수신 시 동기화 카운트다운
+            const onCountdownEnd = () => {
                 const now = Date.now();
                 topGauge1StartTime = now;
                 topGauge2StartTime = now + topGaugeDuration;
                 topGauge3StartTime = now + topGaugeDuration * 2;
                 topGauge4StartTime = now + topGaugeDuration * 3;
-                
-                // 멀티플레이어: 호스트가 라운드 시작을 게스트에게 알림 (카운트다운 후 위치 포함)
-                if (isConnected && conn && isHost) {
-                    conn.send({
-                        type: 'roundStart',
-                        currentRound: currentRound,
-                        playerWins: playerWins,
-                        enemyWins: enemyWins,
-                        hostX: x,
-                        hostY: y
-                    });
-                }
-            });
+            };
+            if (isConnected && isHost && conn) {
+                const countdownEndTime = Date.now() + countdownTotalMs;
+                conn.send({
+                    type: 'roundStart',
+                    currentRound: currentRound,
+                    playerWins: playerWins,
+                    enemyWins: enemyWins,
+                    hostX: x,
+                    hostY: y,
+                    countdownEndTime: countdownEndTime
+                });
+                startCountdown(onCountdownEnd);
+            } else if (isConnected && !isHost) {
+                // 게스트: roundStart 수신 시 startCountdownSynced 호출됨
+            } else {
+                startCountdown(onCountdownEnd);
+            }
         }
         
         // 게임 리셋 함수
@@ -2568,6 +2805,19 @@
             playerWins = 0;
             enemyWins = 0;
             roundInfo.textContent = `Round ${currentRound}`;
+            maxHealth = baseMaxHealth;
+            speedMultiplier = 1;
+            sizeMultiplier = 1;
+            pushPowerMultiplier = 1;
+            pushResistMultiplier = 1;
+            ghostChance = 0;
+            myOrbEffects = [];
+            enemyOrbEffects = [];
+            enemyPushPowerMultiplier = 1;
+            slowUntilTime = 0;
+            const size = characterSize * sizeMultiplier;
+            character.style.width = size + 'px';
+            character.style.height = size + 'px';
             startNextRound();
         }
 
@@ -2586,17 +2836,21 @@
             
             const now = Date.now();
             
-            // 플레이어 위치 전송 (50ms마다 또는 위치가 변경되었을 때)
+            // 플레이어 위치 전송 (50ms마다 또는 위치가 바뀌었을 때), 시퀀스로 순서 보장
             const positionChanged = Math.abs(x - lastSentX) > 0.5 || Math.abs(y - lastSentY) > 0.5;
             if (positionChanged || now - lastPositionSyncTime >= positionSyncInterval) {
                 lastPositionSyncTime = now;
                 lastSentX = x;
                 lastSentY = y;
-                
                 conn.send({
                     type: 'position',
                     x: x,
-                    y: y
+                    y: y,
+                    seq: ++positionSeqCounter,
+                    dashForward: isDashing && dashPhase === 'forward',
+                    vx: velocityX,
+                    vy: velocityY,
+                    pushPowerMultiplier: pushPowerMultiplier
                 });
             }
             
@@ -2734,6 +2988,8 @@
             velocityY = 0;
             blueVelocityX = 0;
             blueVelocityY = 0;
+            pushVelocityX = 0;
+            pushVelocityY = 0;
             
             // 캐릭터 초기 위치 설정
             character.style.left = x + 'px';
